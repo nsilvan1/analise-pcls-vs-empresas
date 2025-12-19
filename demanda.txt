@@ -1,0 +1,106 @@
+Resumo
+Criar um painel dinâmico para análise da base CTOX. O painel deve incluir listagens de PCLs e Empresas. Também deve conter gráficos comparativos com visual limpo.
+
+Contexto
+O objetivo é analisar a base CTOX. Serão fornecidas informações detalhadas sobre PCLs e Empresas por cidade e estado. As análises devem seguir regras específicas:
+
+1.Lista de PCLs em determinada cidade que não tem Empresas credenciadas;
+
+2.Lista de PCLs em determinada cidade que tem Empresas credenciadas e que estão inativas (365 dias);
+
+3.Lista de Empresas em determinada cidade que não tem PCL credenciado;
+
+4.Lista de Empresas em determinada cidade que tem PCL credenciado que não está ativo (90 dias).
+
+Critérios de aceitação
+Listagem de PCLs:
+
+CNPJ
+
+Razão Social
+
+Nome fantasia
+
+Data credenciamento
+
+Aceita voucher (sim/não)
+
+Valor do exame
+
+Acumulado de coletas
+
+Acumulado de coletas neste ano
+
+Ativo/Inativo
+
+Data da última coleta
+
+Cidade
+
+UF
+
+Representante
+
+Quantidade de empresas na cidade do PCL
+
+Quantidade de empresas que utilizaram voucher na cidade do PCL
+
+Quantidade de empresas que nunca utilizaram voucher na cidade
+
+Listagem de Empresas:
+
+CNPJ
+
+Razão Social
+
+Nome fantasia
+
+Data credenciamento
+
+Valor negociado (preço exclusivo)
+
+Acumulado de vouchers
+
+Acumulado de vouchers neste ano
+
+Ativo/Inativo
+
+Data da última utilização de voucher
+
+Cidade
+
+UF
+
+Representante
+
+Quantidade de PCLs credenciados na cidade da empresa
+
+Quantidade de PCLs ativos na cidade da empresa
+
+Quantidade de PCLs inativos na cidade
+
+Gráficos:
+
+Para PCL por estado:
+
+Quantidade de PCLs cadastrados
+
+Quantidade de PCLs inativos x ativos
+
+Para Empresas por estado:
+
+Quantidade de Empresas cadastradas
+
+Quantidade de Empresas inativas x ativas
+
+Regras:
+
+Não separar por representação interna/externa.
+
+Atualização mensal: último dia do mês.
+
+PCL ativo/inativo: 90 dias (<=90 dias sem coleta é ativo, >91 dias é inativo).
+
+Empresa ativa/inativa: 365 dias (<=365 dias sem utilização de voucher é ativo, >366 dias é inativo).
+
+Download: Disponibilizar listas em Excel.

@@ -8,6 +8,7 @@ from pathlib import Path
 import glob
 from io import BytesIO
 import numpy as np
+from sp_connector import get_sp_connector
 
 # ============================================
 # CONFIGURAÇÃO DA PÁGINA
@@ -816,9 +817,62 @@ def create_top_list_card(title, data_dict, color="#22C55E"):
 # FUNÇÕES DE DADOS
 # ============================================
 
+def get_latest_file_from_sp(sp_connector, folder_path: str):
+    """
+    Busca o arquivo Excel mais recente em uma pasta do OneDrive/SharePoint.
+    
+    Args:
+        sp_connector: Instância de SPConnector
+        folder_path: Caminho relativo a Documents (ex: "Data Analysis/Acumulado de Coletas - Empresas")
+    
+    Returns:
+        Tuple (caminho_completo, nome_arquivo, data_modificacao) ou (None, None, None) se não encontrar
+    """
+    try:
+        # Listar arquivos na pasta
+        files = sp_connector.list_files(folder_path)
+        
+        # Debug: verificar o que foi retornado
+        if not files:
+            return None, None, None
+        
+        # Filtrar apenas arquivos .xlsx
+        # Verificar se o item tem a propriedade "file" (indica que é arquivo, não pasta)
+        excel_files = []
+        for f in files:
+            # Verificar se é arquivo: tem propriedade "file" (mesmo que vazia) e NÃO tem "folder"
+            is_file = "file" in f and "folder" not in f
+            name = f.get("name", "")
+            # Verificar se termina com .xlsx (case insensitive)
+            if is_file and name.lower().endswith(".xlsx"):
+                excel_files.append(f)
+        
+        if not excel_files:
+            return None, None, None
+        
+        # Encontrar o arquivo mais recente pela data de modificação
+        latest = max(excel_files, key=lambda x: x.get("lastModifiedDateTime", ""))
+        
+        # Construir caminho completo
+        file_path = f"{folder_path}/{latest['name']}"
+        file_name = latest['name']
+        last_modified = latest.get("lastModifiedDateTime", "")
+        
+        return file_path, file_name, last_modified
+        
+    except FileNotFoundError:
+        # Pasta não encontrada
+        return None, None, None
+    except Exception as e:
+        # Outros erros - logar para debug
+        import traceback
+        print(f"Erro em get_latest_file_from_sp para '{folder_path}': {e}")
+        print(traceback.format_exc())
+        return None, None, None
+
 @st.cache_data
 def load_data():
-    """Carrega o arquivo Excel mais recente de cada pasta"""
+    """Carrega o arquivo Excel mais recente de cada pasta do SharePoint/OneDrive ou localmente"""
     empresas_data = None
     labs_data = None
     empresas_file = None
@@ -845,36 +899,114 @@ def load_data():
             # Re-raise outros erros sem modificar
             raise e
     
-    empresas_path = Path("Acumulado de Coletas - Empresas")
-    if empresas_path.exists():
-        excel_files = list(empresas_path.glob("*.xlsx"))
-        if excel_files:
-            empresas_file = max(excel_files, key=lambda f: f.stat().st_mtime)
-            try:
-                empresas_data = read_excel_safe(empresas_file)
-            except PermissionError as e:
-                errors.append(f"⚠️ **ERRO DE PERMISSÃO:** O arquivo '{empresas_file.name}' está aberto em outro programa (provavelmente Excel). Por favor, **feche o arquivo** e recarregue esta página (F5).")
-            except Exception as e:
-                errors.append(f"Erro ao carregar {empresas_file.name}: {e}")
+    # Tentar conectar ao SharePoint/OneDrive
+    sp_connector = None
+    try:
+        sp_connector = get_sp_connector()
+    except Exception as e:
+        # Erro ao criar conexão - usar fallback local
+        pass
     
-    labs_path = Path("Acumulado de Coletas - Labs")
-    if labs_path.exists():
-        excel_files = list(labs_path.glob("*.xlsx"))
-        if excel_files:
-            labs_file = max(excel_files, key=lambda f: f.stat().st_mtime)
-            try:
-                labs_data = read_excel_safe(labs_file)
-            except PermissionError as e:
-                errors.append(f"⚠️ **ERRO DE PERMISSÃO:** O arquivo '{labs_file.name}' está aberto em outro programa (provavelmente Excel). Por favor, **feche o arquivo** e recarregue esta página (F5).")
-            except Exception as e:
-                errors.append(f"Erro ao carregar {labs_file.name}: {e}")
+    # Se conectado ao SharePoint, buscar arquivos lá
+    if sp_connector is not None:
+        try:
+            # Buscar arquivo mais recente de Empresas
+            empresas_path_sp, empresas_name, empresas_date = get_latest_file_from_sp(
+                sp_connector, 
+                "Data Analysis/Acumulado de Coletas - Empresas"
+            )
+            
+            if empresas_path_sp:
+                try:
+                    empresas_data = sp_connector.read_excel(empresas_path_sp, engine='openpyxl')
+                    # Criar objeto simples para manter compatibilidade com file_info
+                    empresas_file = type('FileInfo', (), {'name': empresas_name})()
+                except Exception as e:
+                    errors.append(f"Erro ao carregar {empresas_name} do SharePoint: {e}")
+                    # Tentar fallback local
+                    empresas_path_sp = None
+            else:
+                # Tentar listar arquivos para debug
+                try:
+                    debug_files = sp_connector.list_files("Data Analysis/Acumulado de Coletas - Empresas")
+                    if debug_files:
+                        file_names = [f.get('name', 'N/A') for f in debug_files]
+                        errors.append(f"⚠️ Nenhum arquivo Excel encontrado em 'Data Analysis/Acumulado de Coletas - Empresas' no SharePoint. Arquivos encontrados: {', '.join(file_names[:5])}")
+                    else:
+                        errors.append("⚠️ Pasta 'Data Analysis/Acumulado de Coletas - Empresas' não encontrada ou vazia no SharePoint")
+                except Exception as debug_e:
+                    errors.append(f"⚠️ Erro ao acessar pasta 'Data Analysis/Acumulado de Coletas - Empresas' no SharePoint: {debug_e}")
+            
+            # Buscar arquivo mais recente de Labs
+            labs_path_sp, labs_name, labs_date = get_latest_file_from_sp(
+                sp_connector,
+                "Data Analysis/Acumulado de Coletas - Labs"
+            )
+            
+            if labs_path_sp:
+                try:
+                    labs_data = sp_connector.read_excel(labs_path_sp, engine='openpyxl')
+                    # Criar objeto simples para manter compatibilidade com file_info
+                    labs_file = type('FileInfo', (), {'name': labs_name})()
+                except Exception as e:
+                    errors.append(f"Erro ao carregar {labs_name} do SharePoint: {e}")
+                    # Tentar fallback local
+                    labs_path_sp = None
+            else:
+                # Tentar listar arquivos para debug
+                try:
+                    debug_files = sp_connector.list_files("Data Analysis/Acumulado de Coletas - Labs")
+                    if debug_files:
+                        file_names = [f.get('name', 'N/A') for f in debug_files]
+                        errors.append(f"⚠️ Nenhum arquivo Excel encontrado em 'Data Analysis/Acumulado de Coletas - Labs' no SharePoint. Arquivos encontrados: {', '.join(file_names[:5])}")
+                    else:
+                        errors.append("⚠️ Pasta 'Data Analysis/Acumulado de Coletas - Labs' não encontrada ou vazia no SharePoint")
+                except Exception as debug_e:
+                    errors.append(f"⚠️ Erro ao acessar pasta 'Data Analysis/Acumulado de Coletas - Labs' no SharePoint: {debug_e}")
+                
+        except Exception as e:
+            errors.append(f"Erro ao acessar SharePoint: {e}")
+            # Continuar com fallback local
+    
+    # Fallback: buscar arquivos localmente se não encontrados no SharePoint
+    if empresas_data is None:
+        empresas_path = Path("Acumulado de Coletas - Empresas")
+        if empresas_path.exists():
+            excel_files = list(empresas_path.glob("*.xlsx"))
+            if excel_files:
+                empresas_file = max(excel_files, key=lambda f: f.stat().st_mtime)
+                try:
+                    empresas_data = read_excel_safe(empresas_file)
+                except PermissionError as e:
+                    errors.append(f"⚠️ **ERRO DE PERMISSÃO:** O arquivo '{empresas_file.name}' está aberto em outro programa (provavelmente Excel). Por favor, **feche o arquivo** e recarregue esta página (F5).")
+                except Exception as e:
+                    errors.append(f"Erro ao carregar {empresas_file.name}: {e}")
+    
+    if labs_data is None:
+        labs_path = Path("Acumulado de Coletas - Labs")
+        if labs_path.exists():
+            excel_files = list(labs_path.glob("*.xlsx"))
+            if excel_files:
+                labs_file = max(excel_files, key=lambda f: f.stat().st_mtime)
+                try:
+                    labs_data = read_excel_safe(labs_file)
+                except PermissionError as e:
+                    errors.append(f"⚠️ **ERRO DE PERMISSÃO:** O arquivo '{labs_file.name}' está aberto em outro programa (provavelmente Excel). Por favor, **feche o arquivo** e recarregue esta página (F5).")
+                except Exception as e:
+                    errors.append(f"Erro ao carregar {labs_file.name}: {e}")
     
     df_empresas = empresas_data if empresas_data is not None else pd.DataFrame()
     df_labs = labs_data if labs_data is not None else pd.DataFrame()
     
+    # Determinar origem dos arquivos (SharePoint ou Local)
+    empresas_source = "sharepoint" if (empresas_file and hasattr(empresas_file, 'name') and not isinstance(empresas_file, Path)) else "local"
+    labs_source = "sharepoint" if (labs_file and hasattr(labs_file, 'name') and not isinstance(labs_file, Path)) else "local"
+    
     file_info = {
         'empresas_file': empresas_file.name if empresas_file else None,
         'labs_file': labs_file.name if labs_file else None,
+        'empresas_source': empresas_source if empresas_file else None,
+        'labs_source': labs_source if labs_file else None,
     }
     
     return df_empresas, df_labs, errors, file_info
@@ -1144,10 +1276,19 @@ with st.sidebar:
     
     # Info dos arquivos
     st.markdown("**FONTES DE DADOS**")
+    
+    # Indicador de origem (SharePoint ou Local)
+    if file_info.get('labs_source') == 'sharepoint' or file_info.get('empresas_source') == 'sharepoint':
+        st.markdown("☁️ **SharePoint Online**")
+    else:
+        st.markdown("💻 **Local**")
+    
     if file_info['labs_file']:
-        st.caption(f"📁 PCLs: {file_info['labs_file']}")
+        source_icon = "☁️" if file_info.get('labs_source') == 'sharepoint' else "💻"
+        st.caption(f"{source_icon} PCLs: {file_info['labs_file']}")
     if file_info['empresas_file']:
-        st.caption(f"📁 Empresas: {file_info['empresas_file']}")
+        source_icon = "☁️" if file_info.get('empresas_source') == 'sharepoint' else "💻"
+        st.caption(f"{source_icon} Empresas: {file_info['empresas_file']}")
 
 # ============================================
 # CONTEÚDO PRINCIPAL

@@ -99,15 +99,16 @@ class SPConnector:
     def normalize_path(self, path: str) -> str:
         """
         Retorna o caminho relativo correto ao "root" usado em cada modo:
-          - OneDrive: relativo a Documents/
+          - OneDrive: relativo ao root do drive (NÃO adiciona Documents/)
           - SharePoint: relativo à biblioteca
         Aceita caminhos server-relative e normaliza.
         """
         if not path:
-            raise ValueError("Caminho vazio.")
+            return ""  # Caminho vazio = raiz
         path = path.strip()
 
         if self.is_onedrive:
+            # Para OneDrive, o root do drive já é a raiz (Documents)
             # Aceita: "Pasta/arquivo.xlsx" OU "/personal/<upn>/Documents/Pasta/arquivo.xlsx"
             p = path.strip()
             if p.startswith("/"):
@@ -120,9 +121,9 @@ class SPConnector:
                     rel = p.lstrip("/")
             else:
                 rel = p
-            # Garanta que está debaixo de Documents/
-            if not rel.lower().startswith("documents/"):
-                rel = f"Documents/{rel}"
+            # Remover prefixo Documents/ se existir (API Graph não precisa)
+            if rel.lower().startswith("documents/"):
+                rel = rel[len("documents/"):]
             return rel
         else:
             # SharePoint site
@@ -212,12 +213,21 @@ class SPConnector:
 
     def list_files(self, folder_path: str = ""):
         """Lista arquivos em uma pasta"""
-        rel = quote(self.normalize_path(folder_path), safe="/") if folder_path else ""
+        rel = self.normalize_path(folder_path) if folder_path else ""
+        
         if self.is_onedrive:
             base = f"{GRAPH}/me/drive" if self._delegated_token else f"{GRAPH}/users/{self.user_upn}/drive"
-            url = f"{base}/root:/{rel}:/children"
+            if rel:
+                # Pasta específica
+                url = f"{base}/root:/{quote(rel, safe='/')}:/children"
+            else:
+                # Raiz do drive
+                url = f"{base}/root/children"
         else:
-            url = f"{GRAPH}/drives/{self._drive_id()}/root:/{rel}:/children"
+            if rel:
+                url = f"{GRAPH}/drives/{self._drive_id()}/root:/{quote(rel, safe='/')}:/children"
+            else:
+                url = f"{GRAPH}/drives/{self._drive_id()}/root/children"
         
         r = requests.get(url, headers=self._headers(), timeout=30)
         r.raise_for_status()
@@ -275,7 +285,8 @@ def get_sp_connector():
                 access_token=access_token
             )
 
-        # 2) Caso contrário, se houver hostname + site_path, usar modo SharePoint Site (app-only)
+        # 2) Verificar se site_path é um OneDrive pessoal (começa com "personal/")
+        # Se for, usar modo OneDrive ao invés de SharePoint Site
         if hostname and site_path:
             # Se site_path vier como URL completa, extrair apenas o path após o hostname
             if site_path.startswith("http://") or site_path.startswith("https://"):
@@ -286,12 +297,42 @@ def get_sp_connector():
                         site_path = site_path[len(prefix):]
                 except Exception:
                     pass
+            
+            # Se site_path começa com "personal/", é um OneDrive pessoal
+            # Extrair o UPN do site_path ou usar o user_upn_secret
+            site_path_clean = site_path.strip("/")
+            if site_path_clean.lower().startswith("personal/"):
+                # É um OneDrive pessoal - usar modo OneDrive
+                # Tentar extrair UPN do site_path ou usar user_upn_secret
+                if user_upn_secret:
+                    return SPConnector(
+                        tenant_id=tenant_id,
+                        client_id=client_id,
+                        client_secret=client_secret,
+                        user_upn=user_upn_secret
+                    )
+                else:
+                    # Tentar extrair UPN do site_path (formato: personal/username_company_com_)
+                    # Converter para formato de email: username@company.com
+                    parts = site_path_clean.split("/")
+                    if len(parts) >= 2:
+                        upn_part = parts[1].rstrip("_")
+                        # Tentar converter para formato de email
+                        upn_email = upn_part.replace("_", ".").replace("-", ".")
+                        return SPConnector(
+                            tenant_id=tenant_id,
+                            client_id=client_id,
+                            client_secret=client_secret,
+                            user_upn=upn_email
+                        )
+            
+            # Caso contrário, é um SharePoint Site real
             return SPConnector(
                 tenant_id=tenant_id,
                 client_id=client_id,
                 client_secret=client_secret,
                 hostname=hostname,
-                site_path=site_path.strip("/"),
+                site_path=site_path_clean,
                 library_name=library_name
             )
 

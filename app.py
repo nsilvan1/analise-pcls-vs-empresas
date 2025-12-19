@@ -999,14 +999,29 @@ def load_data():
     df_labs = labs_data if labs_data is not None else pd.DataFrame()
     
     # Determinar origem dos arquivos (SharePoint ou Local)
-    empresas_source = "sharepoint" if (empresas_file and hasattr(empresas_file, 'name') and not isinstance(empresas_file, Path)) else "local"
-    labs_source = "sharepoint" if (labs_file and hasattr(labs_file, 'name') and not isinstance(labs_file, Path)) else "local"
+    # Verificar se veio do SharePoint (objeto criado dinamicamente, não Path)
+    empresas_source = None
+    labs_source = None
+    
+    if empresas_file:
+        # Se é um objeto criado dinamicamente (do SharePoint), não é Path
+        if not isinstance(empresas_file, Path):
+            empresas_source = "sharepoint"
+        else:
+            empresas_source = "local"
+    
+    if labs_file:
+        # Se é um objeto criado dinamicamente (do SharePoint), não é Path
+        if not isinstance(labs_file, Path):
+            labs_source = "sharepoint"
+        else:
+            labs_source = "local"
     
     file_info = {
-        'empresas_file': empresas_file.name if empresas_file else None,
-        'labs_file': labs_file.name if labs_file else None,
-        'empresas_source': empresas_source if empresas_file else None,
-        'labs_source': labs_source if labs_file else None,
+        'empresas_file': str(empresas_file.name) if empresas_file and hasattr(empresas_file, 'name') else None,
+        'labs_file': str(labs_file.name) if labs_file and hasattr(labs_file, 'name') else None,
+        'empresas_source': empresas_source,
+        'labs_source': labs_source,
     }
     
     return df_empresas, df_labs, errors, file_info

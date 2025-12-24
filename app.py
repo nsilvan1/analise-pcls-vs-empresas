@@ -209,192 +209,20 @@ st.markdown("""
         letter-spacing: 0.05em !important;
     }
     
-    /* DataFrames */
+    /* DataFrames - estilo simplificado para compatibilidade */
     .stDataFrame {
         border-radius: 12px !important;
         overflow: hidden !important;
         border: 1px solid #E4E4E7 !important;
+    }
+    
+    /* Container do DataFrame */
+    [data-testid="stDataFrame"] {
         background: #FFFFFF !important;
-    }
-    
-    .stDataFrame [data-testid="stDataFrameResizable"] {
-        border-radius: 12px !important;
-        background: #FFFFFF !important;
-    }
-    
-    /* Estilização de tabelas com cores da referência - FORÇAR FUNDO BRANCO */
-    .stDataFrame,
-    .stDataFrame *,
-    .stDataFrame table,
-    .stDataFrame table * {
-        background-color: #FFFFFF !important;
-    }
-    
-    .stDataFrame table {
-        background: #FFFFFF !important;
-        background-color: #FFFFFF !important;
-        border-collapse: collapse !important;
-        width: 100% !important;
-    }
-    
-    /* Cabeçalho da tabela - azul claro */
-    .stDataFrame table thead {
-        background: #E3F2FD !important;
-        background-color: #E3F2FD !important;
-    }
-    
-    .stDataFrame table thead th {
-        background: #E3F2FD !important;
-        background-color: #E3F2FD !important;
-        color: #18181B !important;
-        font-weight: 600 !important;
-        border: 1px solid #BBDEFB !important;
-        padding: 10px 12px !important;
-    }
-    
-    /* Linhas do corpo - alternadas - FORÇAR FUNDO BRANCO/CINZA CLARO */
-    .stDataFrame table tbody {
-        background: #FFFFFF !important;
-        background-color: #FFFFFF !important;
-    }
-    
-    .stDataFrame table tbody tr {
-        background: #FFFFFF !important;
-        background-color: #FFFFFF !important;
-    }
-    
-    .stDataFrame table tbody tr:nth-child(even) {
-        background: #F5F5F5 !important;
-        background-color: #F5F5F5 !important;
-    }
-    
-    .stDataFrame table tbody tr:nth-child(odd) {
-        background: #FFFFFF !important;
-        background-color: #FFFFFF !important;
-    }
-    
-    /* Células da tabela - FORÇAR FUNDO E COR DE TEXTO */
-    .stDataFrame table tbody td {
-        background: inherit !important;
-        background-color: inherit !important;
-        color: #18181B !important;
-        border: 1px solid #E0E0E0 !important;
-        padding: 8px 12px !important;
-    }
-    
-    /* Garantir que células de linhas pares tenham fundo cinza claro */
-    .stDataFrame table tbody tr:nth-child(even) td {
-        background: #F5F5F5 !important;
-        background-color: #F5F5F5 !important;
-    }
-    
-    /* Garantir que células de linhas ímpares tenham fundo branco */
-    .stDataFrame table tbody tr:nth-child(odd) td {
-        background: #FFFFFF !important;
-        background-color: #FFFFFF !important;
-    }
-    
-    .stDataFrame table th {
-        background: inherit !important;
-        background-color: inherit !important;
-        color: #18181B !important;
-    }
-    
-    /* Valores negativos em vermelho - será aplicado via JavaScript */
-    .stDataFrame table tbody td.negative-value {
-        color: #DC2626 !important;
-        font-weight: 500 !important;
-    }
-    
-    /* Estilo padrão para células - garantir cor de texto */
-    .stDataFrame table tbody td {
-        color: #18181B !important;
-    }
-    
-    /* Sobrescrever qualquer estilo dark mode do Streamlit */
-    [data-testid="stDataFrameResizable"] table,
-    [data-testid="stDataFrameResizable"] table tbody,
-    [data-testid="stDataFrameResizable"] table tbody tr,
-    [data-testid="stDataFrameResizable"] table tbody td {
-        background-color: #FFFFFF !important;
-        color: #18181B !important;
-    }
-    
-    [data-testid="stDataFrameResizable"] table tbody tr:nth-child(even) {
-        background-color: #F5F5F5 !important;
-    }
-    
-    [data-testid="stDataFrameResizable"] table tbody tr:nth-child(even) td {
-        background-color: #F5F5F5 !important;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# JavaScript para destacar valores negativos nas tabelas e garantir fundo branco
-st.markdown("""
-<script>
-function highlightNegativeValues() {
-    const tables = document.querySelectorAll('.stDataFrame table tbody td');
-    tables.forEach(cell => {
-        const text = cell.textContent.trim();
-        // Verificar se contém sinal negativo ou é um número negativo
-        if (text.startsWith('-') || text.match(/^-\d+/) || text.match(/^-\d+\.\d+/)) {
-            cell.style.color = '#DC2626';
-            cell.style.fontWeight = '500';
-        }
-        // Garantir que o fundo seja branco ou cinza claro (nunca preto)
-        const row = cell.parentElement;
-        if (row) {
-            const rowIndex = Array.from(row.parentElement.children).indexOf(row);
-            if (rowIndex % 2 === 0) {
-                cell.style.backgroundColor = '#FFFFFF';
-            } else {
-                cell.style.backgroundColor = '#F5F5F5';
-            }
-        }
-    });
-}
-
-function forceWhiteBackground() {
-    // Forçar fundo branco em todas as tabelas
-    const dataFrames = document.querySelectorAll('.stDataFrame, [data-testid="stDataFrameResizable"]');
-    dataFrames.forEach(df => {
-        df.style.backgroundColor = '#FFFFFF';
-        const tables = df.querySelectorAll('table');
-        tables.forEach(table => {
-            table.style.backgroundColor = '#FFFFFF';
-            const rows = table.querySelectorAll('tbody tr');
-            rows.forEach((row, index) => {
-                row.style.backgroundColor = index % 2 === 0 ? '#FFFFFF' : '#F5F5F5';
-                const cells = row.querySelectorAll('td');
-                cells.forEach(cell => {
-                    cell.style.backgroundColor = index % 2 === 0 ? '#FFFFFF' : '#F5F5F5';
-                    cell.style.color = '#18181B';
-                });
-            });
-        });
-    });
-}
-
-// Executar quando a página carregar
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function() {
-        highlightNegativeValues();
-        forceWhiteBackground();
-    });
-} else {
-    highlightNegativeValues();
-    forceWhiteBackground();
-}
-
-// Executar após atualizações do Streamlit
-const observer = new MutationObserver(function(mutations) {
-    highlightNegativeValues();
-    forceWhiteBackground();
-});
-observer.observe(document.body, { childList: true, subtree: true });
-</script>
-""", unsafe_allow_html=True)
 
 st.markdown("""
 <style>
@@ -1032,6 +860,7 @@ def normalize_column_names(df):
     df.columns = df.columns.str.strip().str.lower()
     
     # Mapeamento baseado nas colunas reais dos arquivos Excel
+    # Inclui versões com e sem acentos para compatibilidade de encoding
     column_mapping = {
         # Identificação - Empresas
         'cnpj da empresa': 'cnpj',
@@ -1044,12 +873,17 @@ def normalize_column_names(df):
         'data de credenciamento': 'data_credenciamento',
         'data credenciamento': 'data_credenciamento',
         'data da última coleta': 'data_ultima_coleta',
+        'data da ultima coleta': 'data_ultima_coleta',
         'data última coleta': 'data_ultima_coleta',
         'última coleta (voucher)': 'ultima_coleta_voucher',
+        'ultima coleta (voucher)': 'ultima_coleta_voucher',
         'última coleta (não-voucher)': 'ultima_coleta_nao_voucher',
+        'ultima coleta (nao-voucher)': 'ultima_coleta_nao_voucher',
         # Dias sem coleta
+        'dias sem coleta': 'dias_sem_coleta',
         'dias sem coleta (voucher)': 'dias_sem_coleta_voucher',
         'dias sem coleta (não-voucher)': 'dias_sem_coleta_nao_voucher',
+        'dias sem coleta (nao-voucher)': 'dias_sem_coleta_nao_voucher',
         # Localização
         'cidade': 'cidade',
         'estado': 'uf',
@@ -1058,19 +892,42 @@ def normalize_column_names(df):
         # Vouchers/Coletas - Empresas
         'acumulado coletas voucher': 'acumulado_vouchers',
         'acumulado coletas não-voucher': 'acumulado_coletas_nao_voucher',
+        'acumulado coletas nao-voucher': 'acumulado_coletas_nao_voucher',
         'total coletas voucher 2024': 'vouchers_2024',
         'total coletas voucher 2025': 'vouchers_2025',
         'total coletas não-voucher 2024': 'coletas_nao_voucher_2024',
+        'total coletas nao-voucher 2024': 'coletas_nao_voucher_2024',
         'total coletas não-voucher 2025': 'coletas_nao_voucher_2025',
+        'total coletas nao-voucher 2025': 'coletas_nao_voucher_2025',
         # Coletas - PCLs
         'acumulado de coletas': 'acumulado_coletas',
         'total de coletas 2024': 'coletas_2024',
         'total de coletas 2025': 'coletas_2025',
     }
     
+    # Aplicar mapeamento direto
     for old_name, new_name in column_mapping.items():
         if old_name in df.columns:
             df.rename(columns={old_name: new_name}, inplace=True)
+    
+    # Fallback: procurar por colunas que contenham termos-chave (para lidar com encoding)
+    for col in list(df.columns):  # Usar list() para evitar modificar durante iteração
+        col_lower = col.lower()
+        # Mapeamentos específicos por substring (lidar com diferentes encodings)
+        if 'razao_social' not in df.columns and ('raz' in col_lower and 'social' in col_lower):
+            df.rename(columns={col: 'razao_social'}, inplace=True)
+        elif 'nome_fantasia' not in df.columns and 'nome fantasia' in col_lower:
+            df.rename(columns={col: 'nome_fantasia'}, inplace=True)
+        elif 'data_ultima_coleta' not in df.columns and 'ltima coleta' in col_lower and 'voucher' not in col_lower:
+            df.rename(columns={col: 'data_ultima_coleta'}, inplace=True)
+        elif 'ultima_coleta_voucher' not in df.columns and 'ltima coleta' in col_lower and 'voucher' in col_lower and 'n' not in col_lower.split('voucher')[0][-5:]:
+            df.rename(columns={col: 'ultima_coleta_voucher'}, inplace=True)
+        elif 'ultima_coleta_nao_voucher' not in df.columns and 'ltima coleta' in col_lower and 'voucher' in col_lower and ('n' in col_lower.split('voucher')[0][-5:] or 'nao' in col_lower or 'não' in col_lower):
+            df.rename(columns={col: 'ultima_coleta_nao_voucher'}, inplace=True)
+        elif 'dias_sem_coleta_voucher' not in df.columns and 'dias sem coleta' in col_lower and 'voucher' in col_lower and 'n' not in col_lower.split('voucher')[0][-5:]:
+            df.rename(columns={col: 'dias_sem_coleta_voucher'}, inplace=True)
+        elif 'dias_sem_coleta_nao_voucher' not in df.columns and 'dias sem coleta' in col_lower and 'voucher' in col_lower and ('n' in col_lower.split('voucher')[0][-5:] or 'nao' in col_lower or 'não' in col_lower):
+            df.rename(columns={col: 'dias_sem_coleta_nao_voucher'}, inplace=True)
     
     return df
 
@@ -1186,6 +1043,22 @@ def process_labs(df_labs):
     
     return df
 
+def normalize_city_name(city):
+    """Normaliza nome da cidade para comparação (remove espaços extras, converte para minúsculas, remove acentos básicos)"""
+    if pd.isna(city) or city == '':
+        return ''
+    city_str = str(city).strip().lower()
+    # Remover espaços múltiplos
+    city_str = ' '.join(city_str.split())
+    return city_str
+
+def normalize_city_column(df, column='cidade'):
+    """Normaliza a coluna de cidade em um dataframe"""
+    if column in df.columns:
+        df = df.copy()
+        df[column] = df[column].apply(normalize_city_name)
+    return df
+
 def apply_filters(df, estado, cidade):
     """Aplica filtros ao dataframe"""
     df_filtered = df.copy()
@@ -1248,6 +1121,25 @@ with st.spinner("Carregando dados..."):
     
     df_empresas = process_empresas(df_empresas_raw)
     df_labs = process_labs(df_labs_raw)
+    
+    # ============================================
+    # LISTA DE EXCEÇÕES - CNPJs a serem excluídos das análises
+    # ============================================
+    # CNPJs da própria empresa que não devem ser contabilizados
+    CNPJS_EXCLUIDOS = [
+        '07.339.867/0001-15',  # CAEP - CENTRO AVANÇADO DE ESTUDOS E PESQUISA LTDA (nosso CNPJ)
+    ]
+    
+    # Remover CNPJs excluídos dos dados de Labs (PCLs)
+    pcls_excluidos = 0
+    if not df_labs.empty and 'cnpj' in df_labs.columns:
+        total_antes = len(df_labs)
+        df_labs = df_labs[~df_labs['cnpj'].isin(CNPJS_EXCLUIDOS)]
+        pcls_excluidos = total_antes - len(df_labs)
+    
+    # Remover CNPJs excluídos dos dados de Empresas (se necessário)
+    # if not df_empresas.empty and 'cnpj' in df_empresas.columns:
+    #     df_empresas = df_empresas[~df_empresas['cnpj'].isin(CNPJS_EXCLUIDOS)]
 
 # ============================================
 # SIDEBAR
@@ -1304,6 +1196,10 @@ with st.sidebar:
     if file_info['empresas_file']:
         source_icon = "☁️" if file_info.get('empresas_source') == 'sharepoint' else "💻"
         st.caption(f"{source_icon} Empresas: {file_info['empresas_file']}")
+    
+    # Mostrar quantos registros foram excluídos
+    if pcls_excluidos > 0:
+        st.caption(f"🚫 {pcls_excluidos} PCL(s) excluído(s) (CNPJs internos)")
 
 # ============================================
 # CONTEÚDO PRINCIPAL
@@ -1839,14 +1735,30 @@ elif tipo_analise == "Análises Específicas":
         st.markdown("**Descrição:** Lista de PCLs em cidades que não têm nenhuma empresa credenciada.")
         
         if not df_labs.empty and not df_empresas.empty:
-            cidades_com_empresa = set(df_empresas['cidade'].dropna().unique()) if 'cidade' in df_empresas.columns else set()
-            df_result = df_labs[~df_labs['cidade'].isin(cidades_com_empresa)] if 'cidade' in df_labs.columns else pd.DataFrame()
+            # Normalizar cidades antes de comparar
+            df_labs_norm = normalize_city_column(df_labs.copy().reset_index(drop=True), 'cidade')
+            df_empresas_norm = normalize_city_column(df_empresas.copy().reset_index(drop=True), 'cidade')
+            
+            cidades_com_empresa = set(df_empresas_norm['cidade'].dropna().unique()) if 'cidade' in df_empresas_norm.columns else set()
+            cidades_com_empresa = {c for c in cidades_com_empresa if c != ''}  # Remover strings vazias
+            
+            df_result_norm = df_labs_norm[~df_labs_norm['cidade'].isin(cidades_com_empresa)] if 'cidade' in df_labs_norm.columns else pd.DataFrame()
+            # Usar o dataframe original para manter os dados originais
+            if not df_result_norm.empty:
+                df_result = df_labs.iloc[df_result_norm.index].copy()
+            else:
+                df_result = pd.DataFrame()
             
             if not df_result.empty:
                 st.success(f"✅ Encontrados {len(df_result)} PCLs em cidades sem empresas credenciadas")
                 
                 cols = ['cnpj', 'razao_social', 'nome_fantasia', 'cidade', 'uf', 'status', 'acumulado_coletas', 'data_ultima_coleta']
                 cols_available = [c for c in cols if c in df_result.columns]
+                
+                # Fallback: usar todas as colunas se nenhuma das esperadas existir
+                if not cols_available:
+                    cols_available = df_result.columns.tolist()
+                
                 df_display = df_result[cols_available].copy()
                 
                 rename_map = {'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'nome_fantasia': 'Nome Fantasia',
@@ -1873,28 +1785,47 @@ elif tipo_analise == "Análises Específicas":
         st.markdown("**Descrição:** Lista de PCLs em cidades que têm empresas credenciadas, mas TODAS as empresas estão inativas (>365 dias sem voucher).")
         
         if not df_labs.empty and not df_empresas.empty:
+            # Normalizar cidades antes de comparar
+            df_labs_norm = normalize_city_column(df_labs.copy().reset_index(drop=True), 'cidade')
+            df_empresas_norm = normalize_city_column(df_empresas.copy().reset_index(drop=True), 'cidade')
+            
             # Encontrar cidades onde TODAS as empresas são inativas
-            if 'cidade' in df_empresas.columns and 'status' in df_empresas.columns:
-                empresas_por_cidade = df_empresas.groupby('cidade').agg({
+            if 'cidade' in df_empresas_norm.columns and 'status' in df_empresas_norm.columns:
+                empresas_por_cidade = df_empresas_norm.groupby('cidade').agg({
                     'status': lambda x: (x == 'Ativo').sum()
                 }).reset_index()
                 empresas_por_cidade.columns = ['cidade', 'empresas_ativas']
                 
                 # Cidades com empresas, mas nenhuma ativa
                 cidades_empresas_inativas = set(empresas_por_cidade[empresas_por_cidade['empresas_ativas'] == 0]['cidade'])
+                cidades_empresas_inativas = {c for c in cidades_empresas_inativas if c != ''}  # Remover strings vazias
                 
                 # PCLs nessas cidades
-                df_result = df_labs[df_labs['cidade'].isin(cidades_empresas_inativas)] if 'cidade' in df_labs.columns else pd.DataFrame()
+                df_result_norm = df_labs_norm[df_labs_norm['cidade'].isin(cidades_empresas_inativas)] if 'cidade' in df_labs_norm.columns else pd.DataFrame()
+                # Usar o dataframe original para manter os dados originais
+                if not df_result_norm.empty:
+                    df_result = df_labs.iloc[df_result_norm.index].copy()
+                else:
+                    df_result = pd.DataFrame()
                 
                 if not df_result.empty:
                     st.warning(f"⚠️ Encontrados {len(df_result)} PCLs em cidades onde todas as empresas estão inativas")
                     
                     cols = ['cnpj', 'razao_social', 'nome_fantasia', 'cidade', 'uf', 'status', 'acumulado_coletas', 'data_ultima_coleta']
                     cols_available = [c for c in cols if c in df_result.columns]
+                    
+                    # Fallback: usar todas as colunas se nenhuma das esperadas existir
+                    if not cols_available:
+                        cols_available = df_result.columns.tolist()
+                    
                     df_display = df_result[cols_available].copy()
                     
                     # Adicionar quantidade de empresas inativas na cidade
-                    emp_count = df_empresas[df_empresas['cidade'].isin(cidades_empresas_inativas)].groupby('cidade').size().to_dict()
+                    # Criar mapeamento de cidade normalizada para original
+                    cidade_map_norm_to_orig = dict(zip(df_empresas_norm['cidade'], df_empresas['cidade']))
+                    # Mapear cidades normalizadas de volta para originais
+                    cidades_originais = {cidade_map_norm_to_orig.get(c, c) for c in cidades_empresas_inativas if c in cidade_map_norm_to_orig}
+                    emp_count = df_empresas[df_empresas['cidade'].isin(cidades_originais)].groupby('cidade').size().to_dict()
                     df_display['empresas_inativas_cidade'] = df_display['cidade'].map(emp_count).fillna(0).astype(int)
                     
                     rename_map = {'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'nome_fantasia': 'Nome Fantasia',
@@ -1923,14 +1854,30 @@ elif tipo_analise == "Análises Específicas":
         st.markdown("**Descrição:** Lista de empresas em cidades que não têm nenhum PCL credenciado.")
         
         if not df_labs.empty and not df_empresas.empty:
-            cidades_com_pcl = set(df_labs['cidade'].dropna().unique()) if 'cidade' in df_labs.columns else set()
-            df_result = df_empresas[~df_empresas['cidade'].isin(cidades_com_pcl)] if 'cidade' in df_empresas.columns else pd.DataFrame()
+            # Normalizar cidades antes de comparar
+            df_labs_norm = normalize_city_column(df_labs.copy().reset_index(drop=True), 'cidade')
+            df_empresas_norm = normalize_city_column(df_empresas.copy().reset_index(drop=True), 'cidade')
+            
+            cidades_com_pcl = set(df_labs_norm['cidade'].dropna().unique()) if 'cidade' in df_labs_norm.columns else set()
+            cidades_com_pcl = {c for c in cidades_com_pcl if c != ''}  # Remover strings vazias
+            
+            df_result_norm = df_empresas_norm[~df_empresas_norm['cidade'].isin(cidades_com_pcl)] if 'cidade' in df_empresas_norm.columns else pd.DataFrame()
+            # Usar o dataframe original para manter os dados originais
+            if not df_result_norm.empty:
+                df_result = df_empresas.iloc[df_result_norm.index].copy()
+            else:
+                df_result = pd.DataFrame()
             
             if not df_result.empty:
                 st.error(f"❌ Encontradas {len(df_result)} empresas em cidades sem PCL credenciado")
                 
                 cols = ['cnpj', 'razao_social', 'nome_fantasia', 'cidade', 'uf', 'status', 'acumulado_vouchers', 'data_ultima_utilizacao']
                 cols_available = [c for c in cols if c in df_result.columns]
+                
+                # Fallback: usar todas as colunas se nenhuma das esperadas existir
+                if not cols_available:
+                    cols_available = df_result.columns.tolist()
+                
                 df_display = df_result[cols_available].copy()
                 
                 rename_map = {'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'nome_fantasia': 'Nome Fantasia',
@@ -1956,28 +1903,47 @@ elif tipo_analise == "Análises Específicas":
         st.markdown("**Descrição:** Lista de empresas em cidades que têm PCL credenciado, mas TODOS os PCLs estão inativos (>90 dias sem coleta).")
         
         if not df_labs.empty and not df_empresas.empty:
+            # Normalizar cidades antes de comparar
+            df_labs_norm = normalize_city_column(df_labs.copy().reset_index(drop=True), 'cidade')
+            df_empresas_norm = normalize_city_column(df_empresas.copy().reset_index(drop=True), 'cidade')
+            
             # Encontrar cidades onde TODOS os PCLs são inativos
-            if 'cidade' in df_labs.columns and 'status' in df_labs.columns:
-                pcls_por_cidade = df_labs.groupby('cidade').agg({
+            if 'cidade' in df_labs_norm.columns and 'status' in df_labs_norm.columns:
+                pcls_por_cidade = df_labs_norm.groupby('cidade').agg({
                     'status': lambda x: (x == 'Ativo').sum()
                 }).reset_index()
                 pcls_por_cidade.columns = ['cidade', 'pcls_ativos']
                 
                 # Cidades com PCLs, mas nenhum ativo
                 cidades_pcls_inativos = set(pcls_por_cidade[pcls_por_cidade['pcls_ativos'] == 0]['cidade'])
+                cidades_pcls_inativos = {c for c in cidades_pcls_inativos if c != ''}  # Remover strings vazias
                 
                 # Empresas nessas cidades
-                df_result = df_empresas[df_empresas['cidade'].isin(cidades_pcls_inativos)] if 'cidade' in df_empresas.columns else pd.DataFrame()
+                df_result_norm = df_empresas_norm[df_empresas_norm['cidade'].isin(cidades_pcls_inativos)] if 'cidade' in df_empresas_norm.columns else pd.DataFrame()
+                # Usar o dataframe original para manter os dados originais
+                if not df_result_norm.empty:
+                    df_result = df_empresas.iloc[df_result_norm.index].copy()
+                else:
+                    df_result = pd.DataFrame()
                 
                 if not df_result.empty:
                     st.warning(f"⚠️ Encontradas {len(df_result)} empresas em cidades onde todos os PCLs estão inativos")
                     
                     cols = ['cnpj', 'razao_social', 'nome_fantasia', 'cidade', 'uf', 'status', 'acumulado_vouchers', 'data_ultima_utilizacao']
                     cols_available = [c for c in cols if c in df_result.columns]
+                    
+                    # Fallback: usar todas as colunas se nenhuma das esperadas existir
+                    if not cols_available:
+                        cols_available = df_result.columns.tolist()
+                    
                     df_display = df_result[cols_available].copy()
                     
                     # Adicionar quantidade de PCLs inativos na cidade
-                    pcl_count = df_labs[df_labs['cidade'].isin(cidades_pcls_inativos)].groupby('cidade').size().to_dict()
+                    # Criar mapeamento de cidade normalizada para original
+                    cidade_map_norm_to_orig = dict(zip(df_labs_norm['cidade'], df_labs['cidade']))
+                    # Mapear cidades normalizadas de volta para originais
+                    cidades_originais = {cidade_map_norm_to_orig.get(c, c) for c in cidades_pcls_inativos if c in cidade_map_norm_to_orig}
+                    pcl_count = df_labs[df_labs['cidade'].isin(cidades_originais)].groupby('cidade').size().to_dict()
                     df_display['pcls_inativos_cidade'] = df_display['cidade'].map(pcl_count).fillna(0).astype(int)
                     
                     rename_map = {'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'nome_fantasia': 'Nome Fantasia',

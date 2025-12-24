@@ -8,7 +8,9 @@ env/
 venv/
 ENV/
 .venv
-
+secrets.toml
+.env
+.env.*
 # Streamlit
 .streamlit/
 
@@ -26,3 +28,4 @@ ENV/
 .DS_Store
 Thumbs.db
 
+secrets.toml

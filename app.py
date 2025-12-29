@@ -637,7 +637,7 @@ def create_top_list_card(title, data_dict, color="#22C55E"):
             showlegend=False
         )
         
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
     except Exception as e:
         st.error(f"Erro: {str(e)}")
 
@@ -1320,13 +1320,13 @@ if tipo_analise == "Visão Geral":
         if not df_labs.empty and 'uf' in df_labs.columns:
             df_estado = df_labs.groupby('uf').size().reset_index(name='Quantidade')
             fig = create_bar_chart(df_estado, 'uf', 'Quantidade', "PCLs por Estado", max_items=12, color='#22C55E')
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
     
     with col2:
         if not df_empresas.empty and 'uf' in df_empresas.columns:
             df_estado = df_empresas.groupby('uf').size().reset_index(name='Quantidade')
             fig = create_bar_chart(df_estado, 'uf', 'Quantidade', "Empresas por Estado", max_items=12, color='#3B82F6')
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
     
     st.markdown("")
     
@@ -1338,12 +1338,12 @@ if tipo_analise == "Visão Geral":
     with col1:
         if not df_labs.empty and 'uf' in df_labs.columns:
             fig = create_grouped_bar_chart(df_labs, 'uf', "PCLs: Ativos vs Inativos", max_items=10)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
     
     with col2:
         if not df_empresas.empty and 'uf' in df_empresas.columns:
             fig = create_grouped_bar_chart(df_empresas, 'uf', "Empresas: Ativas vs Inativas", max_items=10)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
 elif tipo_analise == "Análise de Coletas":
     create_section_header("🔬", "Análise de Coletas", "Métricas detalhadas de coletas por estado e PCL")
@@ -1424,7 +1424,7 @@ elif tipo_analise == "Análise de Coletas":
                     height=450,
                     margin=dict(l=10, r=70, t=50, b=20)
                 )
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width='stretch')
             
             with col2:
                 # Gráfico de Média de Coletas por Estado
@@ -1453,7 +1453,7 @@ elif tipo_analise == "Análise de Coletas":
                     height=450,
                     margin=dict(l=10, r=70, t=50, b=20)
                 )
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width='stretch')
             
             st.markdown("---")
             
@@ -1466,7 +1466,7 @@ elif tipo_analise == "Análise de Coletas":
             
             st.dataframe(
                 coletas_estado,
-                use_container_width=True,
+                width='stretch',
                 hide_index=True,
                 height=400
             )
@@ -1492,7 +1492,7 @@ elif tipo_analise == "Análise de Coletas":
                 
                 st.dataframe(
                     top_pcls,
-                    use_container_width=True,
+                    width='stretch',
                     hide_index=True,
                     height=500
                 )
@@ -1580,7 +1580,7 @@ elif tipo_analise == "Listagem de PCLs":
         df_final = prepare_display_dataframe(df_display, colunas_pcl, rename_map_pcl)
         
         if not df_final.empty:
-            st.dataframe(df_final, use_container_width=True, hide_index=True, height=500)
+            st.dataframe(df_final, width='stretch', hide_index=True, height=500)
         else:
             st.warning("Nenhum dado disponível para exibição.")
         
@@ -1699,7 +1699,7 @@ elif tipo_analise == "Listagem de Empresas":
         df_final = prepare_display_dataframe(df_display, colunas_empresa, rename_map_empresa)
         
         if not df_final.empty:
-            st.dataframe(df_final, use_container_width=True, hide_index=True, height=500)
+            st.dataframe(df_final, width='stretch', hide_index=True, height=500)
         else:
             st.warning("Nenhum dado disponível para exibição.")
         
@@ -1766,7 +1766,7 @@ elif tipo_analise == "Análises Específicas":
                               'acumulado_coletas': 'Coletas', 'data_ultima_coleta': 'Última Coleta'}
                 df_display = df_display.rename(columns=rename_map)
                 
-                st.dataframe(df_display, use_container_width=True, hide_index=True, height=500)
+                st.dataframe(df_display, width='stretch', hide_index=True, height=500)
                 
                 # Download
                 output = BytesIO()
@@ -1834,7 +1834,7 @@ elif tipo_analise == "Análises Específicas":
                                   'empresas_inativas_cidade': 'Empresas Inativas na Cidade'}
                     df_display = df_display.rename(columns=rename_map)
                     
-                    st.dataframe(df_display, use_container_width=True, hide_index=True, height=500)
+                    st.dataframe(df_display, width='stretch', hide_index=True, height=500)
                     
                     output = BytesIO()
                     with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -1885,7 +1885,7 @@ elif tipo_analise == "Análises Específicas":
                               'acumulado_vouchers': 'Vouchers', 'data_ultima_utilizacao': 'Última Utilização'}
                 df_display = df_display.rename(columns=rename_map)
                 
-                st.dataframe(df_display, use_container_width=True, hide_index=True, height=500)
+                st.dataframe(df_display, width='stretch', hide_index=True, height=500)
                 
                 output = BytesIO()
                 with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -1952,7 +1952,7 @@ elif tipo_analise == "Análises Específicas":
                                   'pcls_inativos_cidade': 'PCLs Inativos na Cidade'}
                     df_display = df_display.rename(columns=rename_map)
                     
-                    st.dataframe(df_display, use_container_width=True, hide_index=True, height=500)
+                    st.dataframe(df_display, width='stretch', hide_index=True, height=500)
                     
                     output = BytesIO()
                     with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -1977,7 +1977,7 @@ elif tipo_analise == "Análises Específicas":
             rename_map = {'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'cidade': 'Cidade', 
                           'uf': 'UF', 'acumulado_coletas': 'Total Coletas', 'status': 'Status'}
             df_display = df_display.rename(columns=rename_map)
-            st.dataframe(df_display, use_container_width=True, hide_index=True, height=500)
+            st.dataframe(df_display, width='stretch', hide_index=True, height=500)
     
     # Estados com menor cobertura
     elif analise_tipo == "Estados com menor cobertura":
@@ -1988,7 +1988,7 @@ elif tipo_analise == "Análises Específicas":
             }).reset_index()
             cobertura.columns = ['UF', 'Cidades Atendidas', 'Total Coletas']
             cobertura = cobertura.sort_values('Cidades Atendidas')
-            st.dataframe(cobertura, use_container_width=True, hide_index=True)
+            st.dataframe(cobertura, width='stretch', hide_index=True)
 
 # ============================================
 # RODAPÉ

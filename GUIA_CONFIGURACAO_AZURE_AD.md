@@ -1,6 +1,6 @@
 # 🔐 Guia Completo: Configurar Login Microsoft com Novo Aplicativo Azure AD
 
-Este guia explica como configurar um novo aplicativo Azure AD para autenticação no sistema Syntox Churn.
+Este guia explica como configurar um novo aplicativo Azure AD para autenticação no sistema CTOX Analytics (Empresa vs PCL).
 
 ---
 
@@ -25,7 +25,7 @@ Este guia explica como configurar um novo aplicativo Azure AD para autenticaçã
 1. No menu lateral, clique em **"App registrations"** (Registros de aplicativo)
 2. Clique no botão **"+ New registration"** (+ Novo registro)
 3. Preencha os campos:
-   - **Name**: Nome do aplicativo (ex: "Syntox Churn Authentication")
+   - **Name**: Nome do aplicativo (ex: "CTOX Analytics Authentication")
    - **Supported account types**: 
      - Se for apenas para sua organização: **"Accounts in this organizational directory only"**
      - Se for multi-tenant: **"Accounts in any organizational directory"**
@@ -33,7 +33,7 @@ Este guia explica como configurar um novo aplicativo Azure AD para autenticaçã
      - **Platform**: Selecione **"Web"**
      - **URI**: Adicione:
        - `http://localhost:8501` (para desenvolvimento local)
-       - `https://syntoxchurn.streamlit.app` (para produção - ajuste conforme sua URL)
+       - `https://empresavspcl.streamlit.app` (para produção - ajuste conforme sua URL)
 4. Clique em **"Register"**
 
 ### 1.3 Obter as Credenciais
@@ -54,7 +54,7 @@ Após criar o aplicativo, você verá a página **"Overview"**:
 1. No menu lateral do aplicativo, clique em **"Certificates & secrets"** (Certificados e segredos)
 2. Na aba **"Client secrets"**, clique em **"+ New client secret"**
 3. Preencha:
-   - **Description**: Uma descrição (ex: "Syntox Churn Secret")
+   - **Description**: Uma descrição (ex: "CTOX Analytics Secret")
    - **Expires**: Escolha a validade (recomendado: 24 meses)
 4. Clique em **"Add"**
 
@@ -74,7 +74,7 @@ Após criar o aplicativo, você verá a página **"Overview"**:
 1. No menu lateral, clique em **"Authentication"** (Autenticação)
 2. Na seção **"Redirect URIs"**, adicione:
    - `http://localhost:8501` (desenvolvimento)
-   - `https://syntoxchurn.streamlit.app` (produção - ajuste conforme necessário)
+   - `https://empresavspcl.streamlit.app` (produção - ajuste conforme necessário)
 3. Na seção **"Implicit grant and hybrid flows"**, marque:
    - ✅ **ID tokens** (opcional, mas recomendado)
 4. Clique em **"Save"**
@@ -113,7 +113,7 @@ client_id = "SEU_CLIENT_ID_AQUI"
 client_secret = "SEU_CLIENT_SECRET_AQUI"
 tenant_id = "SEU_TENANT_ID_AQUI"
 redirect_uri_local = "http://localhost:8501"
-redirect_uri_prod = "https://syntoxchurn.streamlit.app"
+redirect_uri_prod = "https://empresavspcl.streamlit.app"
 authority = "https://login.microsoftonline.com/SEU_TENANT_ID_AQUI"
 scope = ["https://graph.microsoft.com/User.Read", "offline_access"]
 ```
@@ -125,7 +125,7 @@ client_id = "7c19a480-bc01-45b6-8b74-6a3e6154e876"
 client_secret = "abc123~xyz789_secret_value"
 tenant_id = "fee1b506-24b6-444a-919e-83df9442dc5d"
 redirect_uri_local = "http://localhost:8501"
-redirect_uri_prod = "https://syntoxchurn.streamlit.app"
+redirect_uri_prod = "https://empresavspcl.streamlit.app"
 authority = "https://login.microsoftonline.com/fee1b506-24b6-444a-919e-83df9442dc5d"
 scope = ["https://graph.microsoft.com/User.Read", "offline_access"]
 ```
@@ -142,7 +142,7 @@ client_id = "SEU_CLIENT_ID_AQUI"
 client_secret = "SEU_CLIENT_SECRET_AQUI"
 tenant_id = "SEU_TENANT_ID_AQUI"
 redirect_uri_local = "http://localhost:8501"
-redirect_uri_prod = "https://syntoxchurn.streamlit.app"
+redirect_uri_prod = "https://empresavspcl.streamlit.app"
 authority = "https://login.microsoftonline.com/SEU_TENANT_ID_AQUI"
 scope = ["https://graph.microsoft.com/User.Read", "offline_access"]
 ```

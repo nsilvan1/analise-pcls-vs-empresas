@@ -19,7 +19,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Paleta de cores alinhada ao projeto Syntox Churn
+# Paleta de cores alinhada ao projeto CTOX Analytics
 PRIMARY_COLOR = "#6BBF47"
 SECONDARY_COLOR = "#52B54B"
 ACCENT_DARK = "#0F1C16"
@@ -254,7 +254,7 @@ class MicrosoftAuth:
             self.client_secret = auth_config.get("client_secret", os.getenv("AZURE_CLIENT_SECRET"))
             self.tenant_id = auth_config.get("tenant_id", os.getenv("AZURE_TENANT_ID"))
             self.redirect_uri_local = auth_config.get("redirect_uri_local", "http://localhost:8501")
-            self.redirect_uri_prod = auth_config.get("redirect_uri_prod", "https://syntoxchurn.streamlit.app")
+            self.redirect_uri_prod = auth_config.get("redirect_uri_prod", "https://empresavspcl.streamlit.app")
             self.authority = auth_config.get("authority", f"https://login.microsoftonline.com/{self.tenant_id}")
             self.scope = auth_config.get("scope", ["https://graph.microsoft.com/User.Read"])
 
@@ -630,7 +630,7 @@ def create_login_page(auth: MicrosoftAuth) -> bool:
     if logo_base64:
         logo_html = f'<img src="data:image/png;base64,{logo_base64}" alt="Synvia" class="login-logo" />'
     else:
-        logo_html = '<div class="login-logo-placeholder">SYNTOX CHURN</div>'
+        logo_html = '<div class="login-logo-placeholder">CTOX ANALYTICS</div>'
 
     highlights_html = "\n".join([
         '<div class="login-highlights">',
@@ -670,7 +670,7 @@ def create_login_page(auth: MicrosoftAuth) -> bool:
         '<div class="login-inner">',
         '<div class="login-card">',
         f'{logo_html}',
-        '<h1 class="login-title">Bem-vindo ao Syntox Churn</h1>',
+        '<h1 class="login-title">Bem-vindo ao CTOX Analytics</h1>',
         '<p class="login-subtitle">Inteligência para retenção de laboratórios e tomada de decisão baseada em dados.</p>',
         f'{highlights_html}',
         attempts_html if attempts_html else '',

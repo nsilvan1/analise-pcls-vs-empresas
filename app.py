@@ -9,6 +9,7 @@ import glob
 from io import BytesIO
 import numpy as np
 from sp_connector import get_sp_connector
+from auth_microsoft import MicrosoftAuth, AuthManager, create_login_page, create_user_header
 
 # ============================================
 # CONFIGURAÇÃO DA PÁGINA
@@ -19,6 +20,24 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# ============================================
+# AUTENTICAÇÃO MICROSOFT
+# ============================================
+try:
+    auth = MicrosoftAuth()
+    
+    # Verificar e renovar token se necessário
+    AuthManager.check_and_refresh_token(auth)
+    
+    # Mostrar página de login se não autenticado
+    if not create_login_page(auth):
+        st.stop()
+        
+except Exception as e:
+    st.error(f"⚠️ Erro ao inicializar autenticação: {e}")
+    st.info("💡 Verifique as configurações em `.streamlit/secrets.toml`")
+    st.stop()
 
 # ============================================
 # CSS MODERNO (INSPIRADO NO SHADCN UI)
@@ -1152,6 +1171,22 @@ with st.sidebar:
         <p style="margin: 0.5rem 0 0 0; font-size: 12px; color: #71717A;">Painel de Análise</p>
     </div>
     """, unsafe_allow_html=True)
+    
+    # Informações do usuário logado
+    user = AuthManager.get_current_user()
+    if user:
+        display_name = user.get('displayName', 'Usuário')
+        email = user.get('mail') or user.get('userPrincipalName', '')
+        st.markdown(f"""
+        <div style="text-align: center; padding: 0.5rem; background: rgba(107, 191, 71, 0.1); border-radius: 8px; margin-bottom: 0.5rem;">
+            <p style="margin: 0; font-size: 12px; color: #52B54B;">👤 {display_name}</p>
+            <p style="margin: 0; font-size: 10px; color: #71717A;">{email}</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        if st.button("🚪 Sair", key="logout_btn"):
+            AuthManager.logout()
+            st.rerun()
     
     st.markdown("---")
     

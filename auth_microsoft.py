@@ -54,7 +54,7 @@ LOGIN_PAGE_CSS = f"""
     z-index: 1;
 }}
 .login-card {{
-    background: #ffffff;
+    background: #ffffff !important;
     border-radius: 22px;
     padding: 2.75rem 3rem;
     box-shadow: 0 26px 64px rgba(15, 28, 22, 0.22);
@@ -79,10 +79,12 @@ LOGIN_PAGE_CSS = f"""
     border-radius: 14px;
 }}
 .login-title {{
-    font-size: 1.9rem;
-    font-weight: 700;
-    color: {ACCENT_DARK};
-    margin-bottom: 0.35rem;
+    font-size: 1.9rem !important;
+    font-weight: 700 !important;
+    color: {ACCENT_DARK} !important;
+    background: transparent !important;
+    margin-bottom: 0.35rem !important;
+    -webkit-text-fill-color: {ACCENT_DARK} !important;
 }}
 .login-subtitle {{
     font-size: 1.05rem;
@@ -133,31 +135,38 @@ LOGIN_PAGE_CSS = f"""
     color: #991b1b;
 }}
 .login-button {{
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.55rem;
-    width: 100%;
-    margin-top: 0.25rem;
-    padding: 1rem 1.25rem;
-    border-radius: 14px;
-    background: linear-gradient(135deg, {PRIMARY_COLOR}, {SECONDARY_COLOR});
-    color: #ffffff;
-    font-weight: 700;
-    letter-spacing: 0.01em;
-    text-decoration: none;
-    border: none;
-    transition: transform 0.25s ease, box-shadow 0.25s ease;
-    box-shadow: 0 18px 36px rgba(82, 181, 75, 0.28);
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 0.6rem !important;
+    width: 100% !important;
+    margin-top: 1rem !important;
+    padding: 1.1rem 1.5rem !important;
+    border-radius: 12px !important;
+    background: #0F1C16 !important;
+    color: #ffffff !important;
+    font-size: 1rem !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.02em !important;
+    text-decoration: none !important;
+    border: none !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+    box-shadow: 0 4px 14px rgba(15, 28, 22, 0.25) !important;
 }}
 .login-button:hover {{
-    transform: translateY(-2px);
-    box-shadow: 0 24px 46px rgba(82, 181, 75, 0.33);
-    text-decoration: none;
+    background: #1a2f24 !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 6px 20px rgba(15, 28, 22, 0.35) !important;
+    text-decoration: none !important;
+    color: #ffffff !important;
 }}
-.login-button-icon {{
-    font-size: 1.25rem;
-    line-height: 1;
+.login-button:active {{
+    transform: translateY(0) !important;
+    box-shadow: 0 2px 8px rgba(15, 28, 22, 0.2) !important;
+}}
+.login-button svg {{
+    flex-shrink: 0;
 }}
 .login-meta {{
     margin-top: 1.75rem;
@@ -670,13 +679,13 @@ def create_login_page(auth: MicrosoftAuth) -> bool:
         '<div class="login-inner">',
         '<div class="login-card">',
         f'{logo_html}',
-        '<h1 class="login-title">Bem-vindo ao CTOX Analytics</h1>',
-        '<p class="login-subtitle">Inteligência para retenção de laboratórios e tomada de decisão baseada em dados.</p>',
+        '<div class="login-title">Bem-vindo ao CTOX Analytics</div>',
+        '<div class="login-subtitle">Inteligência para retenção de laboratórios e tomada de decisão baseada em dados.</div>',
         f'{highlights_html}',
         attempts_html if attempts_html else '',
         f'<a class="login-button" href="{login_url}">',
-        '<span>Entrar com Microsoft</span>',
-        '<span class="login-button-icon" aria-hidden="true">&rarr;</span>',
+        '<svg width="20" height="20" viewBox="0 0 21 21" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink: 0;"><rect x="1" y="1" width="9" height="9" fill="#F25022"/><rect x="11" y="1" width="9" height="9" fill="#7FBA00"/><rect x="1" y="11" width="9" height="9" fill="#00A4EF"/><rect x="11" y="11" width="9" height="9" fill="#FFB900"/></svg>',
+        '<span>Continuar com Microsoft</span>',
         '</a>',
         '<div class="login-meta">',
         '<span class="login-badge">Acesso restrito Synvia</span>',

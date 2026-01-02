@@ -1194,7 +1194,7 @@ with st.sidebar:
     st.markdown("**NAVEGAÇÃO**")
     tipo_analise = st.selectbox(
         "Módulo",
-        ["Visão Geral", "Análise de Coletas", "Listagem de PCLs", "Listagem de Empresas", "Análises Específicas"],
+        ["Visão Geral", "Visão por Estado", "Análise de Coletas", "Listagem de PCLs", "Listagem de Empresas", "Análises Específicas"],
         label_visibility="collapsed",
         key="nav_selectbox"
     )
@@ -1379,6 +1379,191 @@ if tipo_analise == "Visão Geral":
         if not df_empresas.empty and 'uf' in df_empresas.columns:
             fig = create_grouped_bar_chart(df_empresas, 'uf', "Empresas: Ativas vs Inativas", max_items=10)
             st.plotly_chart(fig, width='stretch')
+
+elif tipo_analise == "Visão por Estado":
+    create_section_header("🗺️", "Visão por Estado", "Painel consolidado com métricas por UF")
+    
+    # Seletor de estado específico
+    estados_lista = []
+    if not df_labs.empty and 'uf' in df_labs.columns:
+        estados_lista = sorted(df_labs['uf'].dropna().unique().tolist())
+    elif not df_empresas.empty and 'uf' in df_empresas.columns:
+        estados_lista = sorted(df_empresas['uf'].dropna().unique().tolist())
+    
+    estado_filtro = st.selectbox(
+        "Selecione o Estado",
+        ["Todos"] + estados_lista,
+        key="estado_visao_uf"
+    )
+    
+    st.markdown("---")
+    
+    # Filtrar dados pelo estado selecionado
+    if estado_filtro == "Todos":
+        df_labs_uf = df_labs.copy()
+        df_empresas_uf = df_empresas.copy()
+    else:
+        df_labs_uf = df_labs[df_labs['uf'] == estado_filtro] if not df_labs.empty and 'uf' in df_labs.columns else pd.DataFrame()
+        df_empresas_uf = df_empresas[df_empresas['uf'] == estado_filtro] if not df_empresas.empty and 'uf' in df_empresas.columns else pd.DataFrame()
+    
+    # Métricas do estado selecionado
+    total_pcls_uf = len(df_labs_uf) if not df_labs_uf.empty else 0
+    pcls_ativos_uf = len(df_labs_uf[df_labs_uf['status'] == 'Ativo']) if not df_labs_uf.empty and 'status' in df_labs_uf.columns else 0
+    pcls_inativos_uf = total_pcls_uf - pcls_ativos_uf
+    
+    total_empresas_uf = len(df_empresas_uf) if not df_empresas_uf.empty else 0
+    empresas_ativas_uf = len(df_empresas_uf[df_empresas_uf['status'] == 'Ativo']) if not df_empresas_uf.empty and 'status' in df_empresas_uf.columns else 0
+    empresas_inativas_uf = total_empresas_uf - empresas_ativas_uf
+    
+    total_coletas_uf = 0
+    if not df_labs_uf.empty and 'acumulado_coletas' in df_labs_uf.columns:
+        try:
+            coletas_sum = df_labs_uf['acumulado_coletas'].sum()
+            total_coletas_uf = float(coletas_sum) if pd.notna(coletas_sum) and np.isfinite(coletas_sum) else 0
+        except:
+            total_coletas_uf = 0
+    
+    total_vouchers_uf = 0
+    if not df_empresas_uf.empty and 'acumulado_vouchers' in df_empresas_uf.columns:
+        try:
+            vouchers_sum = df_empresas_uf['acumulado_vouchers'].sum()
+            total_vouchers_uf = float(vouchers_sum) if pd.notna(vouchers_sum) and np.isfinite(vouchers_sum) else 0
+        except:
+            total_vouchers_uf = 0
+    
+    # Cards de métricas
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        pct_ativos = (pcls_ativos_uf / total_pcls_uf * 100) if total_pcls_uf > 0 else 0
+        create_metric_card("Total PCLs", format_number(total_pcls_uf), f"{pct_ativos:.1f}% ativos", f"↗ {format_number(pcls_ativos_uf)} ativos", "green")
+    with col2:
+        create_metric_card("PCLs Inativos", format_number(pcls_inativos_uf), "Sem coleta há +90 dias", "", "gray")
+    with col3:
+        pct_ativas = (empresas_ativas_uf / total_empresas_uf * 100) if total_empresas_uf > 0 else 0
+        create_metric_card("Total Empresas", format_number(total_empresas_uf), f"{pct_ativas:.1f}% ativas", f"↗ {format_number(empresas_ativas_uf)} ativas", "green")
+    with col4:
+        create_metric_card("Empresas Inativas", format_number(empresas_inativas_uf), "Sem uso há +365 dias", "", "gray")
+    
+    st.markdown("")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        create_metric_card("Total Coletas", format_number(int(total_coletas_uf)), "Acumulado de coletas", "", "gray")
+    with col2:
+        create_metric_card("Total Vouchers", format_number(int(total_vouchers_uf)), "Acumulado de vouchers", "", "gray")
+    with col3:
+        cidades_pcl = df_labs_uf['cidade'].nunique() if not df_labs_uf.empty and 'cidade' in df_labs_uf.columns else 0
+        create_metric_card("Cidades c/ PCL", format_number(cidades_pcl), "Cobertura de PCLs", "", "gray")
+    with col4:
+        cidades_emp = df_empresas_uf['cidade'].nunique() if not df_empresas_uf.empty and 'cidade' in df_empresas_uf.columns else 0
+        create_metric_card("Cidades c/ Empresa", format_number(cidades_emp), "Cobertura de empresas", "", "gray")
+    
+    st.markdown("---")
+    
+    # Gráficos por cidade (apenas se um estado específico estiver selecionado)
+    if estado_filtro != "Todos":
+        create_section_header("📊", f"Distribuição por Cidade - {estado_filtro}")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if not df_labs_uf.empty and 'cidade' in df_labs_uf.columns:
+                df_cidade_pcl = df_labs_uf.groupby('cidade').size().reset_index(name='Quantidade')
+                fig = create_bar_chart(df_cidade_pcl, 'cidade', 'Quantidade', f"PCLs por Cidade - {estado_filtro}", max_items=10, color='#22C55E')
+                st.plotly_chart(fig, width='stretch')
+            else:
+                st.info("Sem dados de PCLs para este estado.")
+        
+        with col2:
+            if not df_empresas_uf.empty and 'cidade' in df_empresas_uf.columns:
+                df_cidade_emp = df_empresas_uf.groupby('cidade').size().reset_index(name='Quantidade')
+                fig = create_bar_chart(df_cidade_emp, 'cidade', 'Quantidade', f"Empresas por Cidade - {estado_filtro}", max_items=10, color='#3B82F6')
+                st.plotly_chart(fig, width='stretch')
+            else:
+                st.info("Sem dados de empresas para este estado.")
+        
+        st.markdown("---")
+    
+    # Tabela resumo por UF
+    create_section_header("📋", "Tabela Resumo por Estado")
+    
+    # Construir tabela consolidada
+    if not df_labs.empty and 'uf' in df_labs.columns:
+        # Agregação de PCLs por UF
+        pcl_agg = df_labs.groupby('uf').agg({
+            'cnpj': 'count',
+            'status': lambda x: (x == 'Ativo').sum(),
+            'acumulado_coletas': 'sum' if 'acumulado_coletas' in df_labs.columns else 'count',
+            'cidade': 'nunique'
+        }).reset_index()
+        pcl_agg.columns = ['UF', 'PCLs', 'PCLs Ativos', 'Coletas', 'Cidades c/ PCL']
+        pcl_agg['PCLs Inativos'] = pcl_agg['PCLs'] - pcl_agg['PCLs Ativos']
+    else:
+        pcl_agg = pd.DataFrame(columns=['UF', 'PCLs', 'PCLs Ativos', 'PCLs Inativos', 'Coletas', 'Cidades c/ PCL'])
+    
+    if not df_empresas.empty and 'uf' in df_empresas.columns:
+        # Agregação de Empresas por UF
+        emp_agg = df_empresas.groupby('uf').agg({
+            'cnpj': 'count',
+            'status': lambda x: (x == 'Ativo').sum(),
+            'acumulado_vouchers': 'sum' if 'acumulado_vouchers' in df_empresas.columns else 'count',
+            'cidade': 'nunique'
+        }).reset_index()
+        emp_agg.columns = ['UF', 'Empresas', 'Empresas Ativas', 'Vouchers', 'Cidades c/ Empresa']
+        emp_agg['Empresas Inativas'] = emp_agg['Empresas'] - emp_agg['Empresas Ativas']
+    else:
+        emp_agg = pd.DataFrame(columns=['UF', 'Empresas', 'Empresas Ativas', 'Empresas Inativas', 'Vouchers', 'Cidades c/ Empresa'])
+    
+    # Merge das duas tabelas
+    if not pcl_agg.empty and not emp_agg.empty:
+        tabela_resumo = pd.merge(pcl_agg, emp_agg, on='UF', how='outer').fillna(0)
+    elif not pcl_agg.empty:
+        tabela_resumo = pcl_agg.copy()
+        tabela_resumo['Empresas'] = 0
+        tabela_resumo['Empresas Ativas'] = 0
+        tabela_resumo['Empresas Inativas'] = 0
+        tabela_resumo['Vouchers'] = 0
+        tabela_resumo['Cidades c/ Empresa'] = 0
+    elif not emp_agg.empty:
+        tabela_resumo = emp_agg.copy()
+        tabela_resumo['PCLs'] = 0
+        tabela_resumo['PCLs Ativos'] = 0
+        tabela_resumo['PCLs Inativos'] = 0
+        tabela_resumo['Coletas'] = 0
+        tabela_resumo['Cidades c/ PCL'] = 0
+    else:
+        tabela_resumo = pd.DataFrame()
+    
+    if not tabela_resumo.empty:
+        # Ordenar e formatar colunas
+        colunas_ordem = ['UF', 'PCLs', 'PCLs Ativos', 'PCLs Inativos', 'Empresas', 'Empresas Ativas', 'Empresas Inativas', 'Coletas', 'Vouchers', 'Cidades c/ PCL', 'Cidades c/ Empresa']
+        colunas_existentes = [c for c in colunas_ordem if c in tabela_resumo.columns]
+        tabela_resumo = tabela_resumo[colunas_existentes]
+        
+        # Converter para inteiros
+        for col in tabela_resumo.columns:
+            if col != 'UF':
+                tabela_resumo[col] = pd.to_numeric(tabela_resumo[col], errors='coerce').fillna(0).astype(int)
+        
+        tabela_resumo = tabela_resumo.sort_values('PCLs', ascending=False)
+        
+        st.dataframe(tabela_resumo, width='stretch', hide_index=True, height=500)
+        
+        # Download
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            tabela_resumo.to_excel(writer, index=False, sheet_name='Resumo por UF')
+        
+        st.download_button(
+            label="📥 Download Resumo por UF (Excel)",
+            data=output.getvalue(),
+            file_name=f'resumo_por_uf_{datetime.now().strftime("%Y%m%d")}.xlsx',
+            mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+    else:
+        st.warning("Nenhum dado disponível para exibição.")
 
 elif tipo_analise == "Análise de Coletas":
     create_section_header("🔬", "Análise de Coletas", "Métricas detalhadas de coletas por estado e PCL")

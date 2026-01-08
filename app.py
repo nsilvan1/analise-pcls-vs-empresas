@@ -8,7 +8,7 @@ from pathlib import Path
 import glob
 from io import BytesIO
 import numpy as np
-from sp_connector import get_sp_connector
+from sp_connector import get_sp_connector, SPConnector
 from auth_microsoft import MicrosoftAuth, AuthManager, create_login_page, create_user_header
 
 # ============================================
@@ -40,309 +40,9 @@ except Exception as e:
     st.stop()
 
 # ============================================
-# CSS MODERNO (INSPIRADO NO SHADCN UI)
+# CSS MÍNIMO (PADRÃO STREAMLIT)
 # ============================================
-st.markdown("""
-<style>
-    /* Importar fonte Inter */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-    
-    /* Reset e Base */
-    *, *::before, *::after {
-        box-sizing: border-box;
-    }
-    
-    html, body, [class*="css"] {
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
-    }
-    
-    /* Fundo da aplicação */
-    .stApp, .main, body {
-        background: #FAFAFA !important;
-    }
-    
-    .main .block-container {
-        padding: 2rem 2rem 3rem 2rem;
-        max-width: 1600px;
-        background: #FAFAFA !important;
-    }
-    
-    /* Headers */
-    h1 {
-        font-size: 2rem !important;
-        font-weight: 700 !important;
-        color: #09090B !important;
-        letter-spacing: -0.02em !important;
-    }
-    
-    h2 {
-        font-size: 1.5rem !important;
-        font-weight: 600 !important;
-        color: #18181B !important;
-        letter-spacing: -0.01em !important;
-        margin-bottom: 1rem !important;
-    }
-    
-    h3 {
-        font-size: 1.125rem !important;
-        font-weight: 600 !important;
-        color: #27272A !important;
-    }
-    
-    /* Texto padrão maior */
-    p, span, div, label {
-        font-size: 14px !important;
-        color: #3F3F46 !important;
-    }
-    
-    /* Sidebar moderna */
-    [data-testid="stSidebar"] {
-        background: #FFFFFF !important;
-        border-right: 1px solid #E4E4E7 !important;
-    }
-    
-    [data-testid="stSidebar"] > div {
-        background: #FFFFFF !important;
-        padding: 1.5rem 1rem !important;
-    }
-    
-    /* Labels da sidebar */
-    [data-testid="stSidebar"] label {
-        font-size: 13px !important;
-        font-weight: 600 !important;
-        color: #18181B !important;
-        text-transform: uppercase !important;
-        letter-spacing: 0.05em !important;
-    }
-    
-    [data-testid="stSidebar"] label p {
-        font-size: 13px !important;
-        font-weight: 600 !important;
-        color: #18181B !important;
-    }
-    
-    /* Selects modernos */
-    div[data-baseweb="select"] > div {
-        background: #FFFFFF !important;
-        border: 1px solid #E4E4E7 !important;
-        border-radius: 8px !important;
-        color: #18181B !important;
-        font-weight: 500 !important;
-        transition: all 0.2s ease !important;
-    }
-    
-    div[data-baseweb="select"] > div:hover {
-        border-color: #22C55E !important;
-    }
-    
-    div[data-baseweb="select"] > div:focus,
-    div[data-baseweb="select"] > div[aria-expanded="true"] {
-        border-color: #22C55E !important;
-        box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.15) !important;
-    }
-    
-    div[data-baseweb="select"] span {
-        color: #18181B !important;
-        font-weight: 500 !important;
-        font-size: 14px !important;
-    }
-    
-    div[data-baseweb="select"] svg {
-        fill: #71717A !important;
-    }
-    
-    /* Dropdown do select */
-    [data-baseweb="popover"], 
-    div[data-baseweb="select"] ul,
-    [role="listbox"] {
-        background: #FFFFFF !important;
-        border: 1px solid #E4E4E7 !important;
-        border-radius: 8px !important;
-        box-shadow: 0 10px 40px rgba(0,0,0,0.1) !important;
-    }
-    
-    [role="option"] {
-        background: #FFFFFF !important;
-        color: #18181B !important;
-        font-size: 14px !important;
-        padding: 10px 12px !important;
-    }
-    
-    [role="option"]:hover,
-    [role="option"][aria-selected="true"] {
-        background: #F0FDF4 !important;
-        color: #166534 !important;
-    }
-    
-    /* Botões */
-    .stButton > button {
-        background: #18181B !important;
-        color: #FFFFFF !important;
-        border: none !important;
-        border-radius: 8px !important;
-        padding: 0.625rem 1.25rem !important;
-        font-weight: 500 !important;
-        font-size: 14px !important;
-        transition: all 0.2s ease !important;
-    }
-    
-    .stButton > button:hover {
-        background: #27272A !important;
-        transform: translateY(-1px) !important;
-    }
-    
-    /* Botões de Download - verde claro */
-    .stDownloadButton > button {
-        background: #4CAF50 !important;
-        color: #FFFFFF !important;
-        border: none !important;
-        border-radius: 6px !important;
-        padding: 0.625rem 1.25rem !important;
-        font-weight: 500 !important;
-        font-size: 14px !important;
-        transition: all 0.2s ease !important;
-    }
-    
-    .stDownloadButton > button:hover {
-        background: #45A049 !important;
-        transform: translateY(-1px) !important;
-    }
-    
-    /* Cards container */
-    [data-testid="stHorizontalBlock"] {
-        gap: 1rem !important;
-    }
-    
-    /* Métricas */
-    [data-testid="stMetricValue"] {
-        font-size: 2rem !important;
-        font-weight: 700 !important;
-        color: #09090B !important;
-    }
-    
-    [data-testid="stMetricLabel"] {
-        font-size: 13px !important;
-        font-weight: 600 !important;
-        color: #71717A !important;
-        text-transform: uppercase !important;
-        letter-spacing: 0.05em !important;
-    }
-    
-    /* DataFrames - estilo simplificado para compatibilidade */
-    .stDataFrame {
-        border-radius: 12px !important;
-        overflow: hidden !important;
-        border: 1px solid #E4E4E7 !important;
-    }
-    
-    /* Container do DataFrame */
-    [data-testid="stDataFrame"] {
-        background: #FFFFFF !important;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-
-st.markdown("""
-<style>
-    /* Scrollbar moderna */
-    ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
-    }
-    
-    ::-webkit-scrollbar-track {
-        background: #F4F4F5;
-        border-radius: 4px;
-    }
-    
-    ::-webkit-scrollbar-thumb {
-        background: #D4D4D8;
-        border-radius: 4px;
-    }
-    
-    ::-webkit-scrollbar-thumb:hover {
-        background: #A1A1AA;
-    }
-    
-    /* Tabs customizadas */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 0 !important;
-        background: #F4F4F5 !important;
-        border-radius: 10px !important;
-        padding: 4px !important;
-    }
-    
-    .stTabs [data-baseweb="tab"] {
-        background: transparent !important;
-        border-radius: 8px !important;
-        color: #71717A !important;
-        font-weight: 500 !important;
-        font-size: 14px !important;
-        padding: 8px 16px !important;
-    }
-    
-    .stTabs [aria-selected="true"] {
-        background: #FFFFFF !important;
-        color: #18181B !important;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1) !important;
-    }
-    
-    /* Alertas e mensagens */
-    .stSuccess {
-        background: #F0FDF4 !important;
-        border: 1px solid #BBF7D0 !important;
-        border-radius: 8px !important;
-        color: #166534 !important;
-    }
-    
-    .stWarning {
-        background: #FFFBEB !important;
-        border: 1px solid #FEF3C7 !important;
-        border-radius: 8px !important;
-        color: #92400E !important;
-    }
-    
-    .stInfo {
-        background: #EFF6FF !important;
-        border: 1px solid #DBEAFE !important;
-        border-radius: 8px !important;
-        color: #1E40AF !important;
-    }
-    
-    /* Divider */
-    hr {
-        border: none !important;
-        border-top: 1px solid #E4E4E7 !important;
-        margin: 2rem 0 !important;
-    }
-    
-    /* Caption/Footer */
-    .stCaption, small {
-        font-size: 12px !important;
-        color: #71717A !important;
-    }
-    
-    /* Barra de navegação superior */
-    .main .block-container {
-        padding-top: 1rem !important;
-    }
-    
-    /* Selectbox da navegação superior */
-    div[data-testid="column"]:has(select[key="nav_selectbox"]) {
-        display: flex;
-        align-items: center;
-        justify-content: flex-end;
-    }
-    
-    div[data-testid="column"]:has(select[key="nav_selectbox"]) label {
-        font-size: 14px !important;
-        font-weight: 600 !important;
-        color: #18181B !important;
-        margin-bottom: 0.5rem !important;
-    }
-</style>
-""", unsafe_allow_html=True)
+# Removido CSS personalizado - usando tema padrão do Streamlit
 
 # ============================================
 # FUNÇÕES AUXILIARES
@@ -719,24 +419,63 @@ def get_latest_file_from_sp(sp_connector, folder_path: str):
 
 @st.cache_data(ttl=3600)
 def load_matriz_logistica():
-    """Carrega dados da matriz logística para enriquecer PCLs com transportadora/frequência"""
+    """Carrega dados da matriz logística do SharePoint para enriquecer PCLs com transportadora/frequência.
+
+    Retorna:
+        tuple: (DataFrame, status_info)
+            - DataFrame: dados da matriz ou DataFrame vazio se falhar
+            - status_info: dict com 'loaded' (bool), 'source' (str), 'records' (int), 'error' (str ou None)
+    """
+    df = pd.DataFrame()
+    status_info = {
+        'loaded': False,
+        'source': 'SharePoint',
+        'records': 0,
+        'error': None,
+        'loaded_at': None
+    }
+
+    def process_matriz_df(df_raw):
+        """Processa o DataFrame da matriz logística"""
+        # Normalizar nomes de colunas (lidar com encoding)
+        df_raw.columns = ['cidade_uf_transporte', 'transporte', 'municipio', 'uf',
+                     'porta_a_porta', 'prazo_total', 'frequencia', 'col13', 'col14']
+        # Manter apenas colunas necessárias
+        df_processed = df_raw[['municipio', 'uf', 'transporte', 'frequencia']].copy()
+        # Normalizar cidade para match
+        df_processed['municipio'] = df_processed['municipio'].str.strip().str.upper()
+        df_processed['uf'] = df_processed['uf'].str.strip().str.upper()
+        return df_processed
+
+    # Carregar apenas do SharePoint
     try:
-        # Tentar arquivo local primeiro
-        local_path = Path(__file__).parent / "CONSULTA MATRIZ LOGISTICA.1.xlsx"
-        if local_path.exists():
-            df = pd.read_excel(local_path)
-            # Normalizar nomes de colunas (lidar com encoding)
-            df.columns = ['cidade_uf_transporte', 'transporte', 'municipio', 'uf',
-                         'porta_a_porta', 'prazo_total', 'frequencia', 'col13', 'col14']
-            # Manter apenas colunas necessárias
-            df = df[['municipio', 'uf', 'transporte', 'frequencia']].copy()
-            # Normalizar cidade para match
-            df['municipio'] = df['municipio'].str.strip().str.upper()
-            df['uf'] = df['uf'].str.strip().str.upper()
-            return df
+        sp_logistica = st.secrets.get("sharepoint_logistica", {})
+        if not sp_logistica:
+            status_info['error'] = "Configuração [sharepoint_logistica] não encontrada"
+        else:
+            graph_cfg = st.secrets.get("graph", {})
+            connector = SPConnector(
+                tenant_id=graph_cfg.get("tenant_id"),
+                client_id=graph_cfg.get("client_id"),
+                client_secret=graph_cfg.get("client_secret"),
+                hostname=sp_logistica.get("hostname"),
+                site_path=sp_logistica.get("site_path"),
+                library_name=sp_logistica.get("library_name")
+            )
+            file_path = sp_logistica.get("file_path", "")
+            if not file_path:
+                status_info['error'] = "Caminho do arquivo não configurado"
+            else:
+                df_raw = connector.read_excel(file_path)
+                df = process_matriz_df(df_raw)
+                status_info['loaded'] = True
+                status_info['records'] = len(df)
+                status_info['loaded_at'] = datetime.now()
     except Exception as e:
-        print(f"Aviso: Não foi possível carregar matriz logística: {e}")
-    return pd.DataFrame()
+        status_info['error'] = str(e)
+        print(f"Erro ao carregar matriz logística do SharePoint: {e}")
+
+    return df, status_info
 
 def enrich_pcls_with_logistics(df_labs, df_matriz):
     """Adiciona colunas transportadora e frequencia aos PCLs baseado na cidade/UF"""
@@ -1204,7 +943,7 @@ with st.spinner("Carregando dados..."):
     df_labs = process_labs(df_labs_raw)
 
     # Enriquecer PCLs com dados de logística (transportadora e frequência)
-    df_matriz_logistica = load_matriz_logistica()
+    df_matriz_logistica, matriz_status = load_matriz_logistica()
     df_labs = enrich_pcls_with_logistics(df_labs, df_matriz_logistica)
 
     # ============================================
@@ -1284,20 +1023,33 @@ with st.sidebar:
     
     # Info dos arquivos
     st.markdown("**FONTES DE DADOS**")
-    
+
     # Indicador de origem (SharePoint ou Local)
     if file_info.get('labs_source') == 'sharepoint' or file_info.get('empresas_source') == 'sharepoint':
         st.markdown("☁️ **SharePoint Online**")
     else:
         st.markdown("💻 **Local**")
-    
+
     if file_info['labs_file']:
         source_icon = "☁️" if file_info.get('labs_source') == 'sharepoint' else "💻"
         st.caption(f"{source_icon} PCLs: {file_info['labs_file']}")
     if file_info['empresas_file']:
         source_icon = "☁️" if file_info.get('empresas_source') == 'sharepoint' else "💻"
         st.caption(f"{source_icon} Empresas: {file_info['empresas_file']}")
-    
+
+    # Status da Matriz Logística
+    if matriz_status['loaded']:
+        loaded_at = matriz_status.get('loaded_at')
+        if loaded_at:
+            loaded_at_str = loaded_at.strftime("%d/%m/%Y %H:%M")
+            st.caption(f"☁️ Matriz Logística: {matriz_status['records']} rotas (atualizada em {loaded_at_str})")
+        else:
+            st.caption(f"☁️ Matriz Logística: {matriz_status['records']} rotas")
+    else:
+        st.caption(f"⚠️ Matriz Logística: Não carregada")
+        if matriz_status.get('error'):
+            st.caption(f"   Erro: {matriz_status['error'][:50]}...")
+
     # Mostrar quantos registros foram excluídos
     if pcls_excluidos > 0:
         st.caption(f"🚫 {pcls_excluidos} PCL(s) excluído(s) (CNPJs internos)")

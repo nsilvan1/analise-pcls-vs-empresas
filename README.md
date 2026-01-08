@@ -32,9 +32,12 @@ A aplicação será aberta automaticamente no navegador em `http://localhost:850
 ├── app.py                                    # Aplicação principal
 ├── requirements.txt                          # Dependências
 ├── README.md                                 # Este arquivo
-├── Acumulado de Coletas - Empresas/         # Arquivos Excel de empresas
+├── METRICAS.md                               # Documentação de métricas
+├── FAQ.md                                    # Perguntas frequentes (usuário final)
+├── CONSULTA MATRIZ LOGISTICA.1.xlsx          # Dados de transportadoras/frequência
+├── Acumulado de Coletas - Empresas/          # Arquivos Excel de empresas (SharePoint)
 │   └── empresas_data_*.xlsx
-└── Acumulado de Coletas - Labs/              # Arquivos Excel de labs (PCLs)
+└── Acumulado de Coletas - Labs/              # Arquivos Excel de labs/PCLs (SharePoint)
     └── laboratories_data_*.xlsx
 ```
 
@@ -54,18 +57,16 @@ Exibe todos os campos solicitados:
 - Razão Social
 - Nome Fantasia
 - Data Credenciamento
-- Aceita Voucher (sim/não)
-- Valor do Exame
+- Representante
+- **Transportadora** (opções de transporte disponíveis na cidade)
+- **Frequência** (frequência de coleta na cidade)
 - Acumulado de Coletas
 - Acumulado de Coletas neste Ano
 - Ativo/Inativo
 - Data da Última Coleta
 - Cidade
 - UF
-- Representante
 - Quantidade de empresas na cidade do PCL
-- Quantidade de empresas que utilizaram voucher na cidade do PCL
-- Quantidade de empresas que nunca utilizaram voucher na cidade
 
 ### 3. Listagem de Empresas
 Exibe todos os campos solicitados:
@@ -114,4 +115,8 @@ A aplicação permite filtrar por:
 - A aplicação lê automaticamente todos os arquivos `.xlsx` das pastas especificadas
 - Os dados são combinados automaticamente quando há múltiplos arquivos
 - A aplicação tenta normalizar automaticamente os nomes das colunas para diferentes variações
+
+## ❓ Dúvidas Frequentes
+
+Consulte o arquivo [FAQ.md](FAQ.md) para orientações sobre uso do dashboard, explicação das métricas e solução de problemas comuns.
 

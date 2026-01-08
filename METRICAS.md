@@ -42,6 +42,24 @@ Este documento descreve como cada métrica é calculada no sistema de análise d
 | Dias sem coleta | Dias desde a última coleta |
 | Ativo em Coletas | Status de atividade (True/False) |
 
+### Arquivo de Matriz Logística (`CONSULTA MATRIZ LOGISTICA.1.xlsx`)
+
+| Coluna Original | Coluna Normalizada | Descrição |
+|-----------------|-------------------|-----------|
+| CIDADE/UF-TRANSPORTE | cidade_uf_transporte | Chave composta cidade+UF+transportadora |
+| TRANSPORTE | transporte | Nome da transportadora |
+| MUNICÍPIO | municipio | Nome da cidade (usado para relacionamento) |
+| UF | uf | Estado (usado para relacionamento) |
+| PORTA-A-PORTA | porta_a_porta | Indica se oferece serviço porta-a-porta (SIM/NAO) |
+| PRAZO TOTAL (D+) | prazo_total | Prazo de entrega em dias |
+| FREQUENCIA | frequencia | Frequência de coleta (DIARIO, SEMANAL, etc.) |
+
+**Transportadoras Disponíveis:**
+AIRLAB, ALFA, ANALOG, BIOMED LOG, CARE EXPRESS, CORREIOS AP, CORREIOS RETIRA, DHL, GRITSCH, I-GO/AIRLAB, LC LOG, LOG EXPRESS, LUMA, MOTOBOY, NACIONAL, PADLOG, SIX LOGISTICA, VAPT VUPT, VICARGO, VITTA
+
+**Frequências Disponíveis:**
+DIARIO, SEMANAL, ALTERNADO, 2ª 4ª E 6ª, 3ª E 5ª, 2ª E 4ª, 3ª E 6ª, entre outras
+
 ---
 
 ## 🏢 Métricas de Empresas
@@ -108,6 +126,8 @@ ATIVO = (Dias sem coleta <= 90) OU (Ativo em Coletas == True)
 | **Coletas Total** | `Acumulado de Coletas` | Total histórico de coletas realizadas |
 | **Coletas 2025** | `Total de Coletas 2025` | Coletas realizadas no ano de 2025 |
 | **Última Coleta** | `Data da Última Coleta` | Data da última coleta realizada |
+| **Transportadora** | `JOIN(transportadoras da cidade)` | Transportadoras disponíveis na cidade do PCL |
+| **Frequência** | `JOIN(frequências da cidade)` | Frequências de coleta disponíveis na cidade |
 
 ### Métricas por Cidade
 
@@ -198,8 +218,8 @@ Lista empresas em cidades onde existem PCLs, mas todos estão inativos.
 
 ```
 1. Carregar arquivo Excel mais recente de cada pasta
-   ├── Acumulado de Coletas - Empresas/*.xlsx
-   └── Acumulado de Coletas - Labs/*.xlsx
+   ├── Acumulado de Coletas - Empresas/*.xlsx (SharePoint/Local)
+   └── Acumulado de Coletas - Labs/*.xlsx (SharePoint/Local)
 
 2. Normalizar nomes das colunas
    └── Converter para formato padronizado (snake_case)
@@ -215,9 +235,15 @@ Lista empresas em cidades onde existem PCLs, mas todos estão inativos.
    ├── OU calcular baseado em "Dias sem coleta"
    └── Definir status (Ativo/Inativo)
 
-5. Aplicar filtros (Estado/Cidade)
+5. Enriquecer PCLs com dados logísticos
+   ├── Carregar CONSULTA MATRIZ LOGISTICA.1.xlsx
+   ├── Relacionar por CIDADE + UF
+   ├── Agregar transportadoras (separadas por " | ")
+   └── Agregar frequências (separadas por " | ")
 
-6. Exibir métricas e tabelas
+6. Aplicar filtros (Estado/Cidade)
+
+7. Exibir métricas e tabelas
 ```
 
 ---
@@ -234,4 +260,8 @@ Lista empresas em cidades onde existem PCLs, mas todos estão inativos.
 
 ---
 
-*Última atualização: Dezembro 2025*
+5. **Dados de Logística**: A matriz logística é carregada do arquivo local `CONSULTA MATRIZ LOGISTICA.1.xlsx` e relacionada com os PCLs por cidade/UF. Quando uma cidade tem múltiplas transportadoras, elas são concatenadas com " | ".
+
+---
+
+*Última atualização: Janeiro 2026*

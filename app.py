@@ -717,6 +717,68 @@ def get_latest_file_from_sp(sp_connector, folder_path: str):
         print(traceback.format_exc())
         return None, None, None
 
+@st.cache_data(ttl=3600)
+def load_matriz_logistica():
+    """Carrega dados da matriz logística para enriquecer PCLs com transportadora/frequência"""
+    try:
+        # Tentar arquivo local primeiro
+        local_path = Path(__file__).parent / "CONSULTA MATRIZ LOGISTICA.1.xlsx"
+        if local_path.exists():
+            df = pd.read_excel(local_path)
+            # Normalizar nomes de colunas (lidar com encoding)
+            df.columns = ['cidade_uf_transporte', 'transporte', 'municipio', 'uf',
+                         'porta_a_porta', 'prazo_total', 'frequencia', 'col13', 'col14']
+            # Manter apenas colunas necessárias
+            df = df[['municipio', 'uf', 'transporte', 'frequencia']].copy()
+            # Normalizar cidade para match
+            df['municipio'] = df['municipio'].str.strip().str.upper()
+            df['uf'] = df['uf'].str.strip().str.upper()
+            return df
+    except Exception as e:
+        print(f"Aviso: Não foi possível carregar matriz logística: {e}")
+    return pd.DataFrame()
+
+def enrich_pcls_with_logistics(df_labs, df_matriz):
+    """Adiciona colunas transportadora e frequencia aos PCLs baseado na cidade/UF"""
+    if df_labs.empty or df_matriz.empty:
+        df_labs = df_labs.copy()
+        df_labs['transportadora'] = ''
+        df_labs['frequencia'] = ''
+        return df_labs
+
+    df = df_labs.copy()
+
+    # Normalizar cidade/UF para match
+    df['_cidade_norm'] = df['cidade'].fillna('').str.strip().str.upper()
+    df['_uf_norm'] = df['uf'].fillna('').str.strip().str.upper()
+
+    # Agrupar transportadoras e frequências por cidade/UF
+    def join_unique(series):
+        values = series.dropna().astype(str)
+        values = [v for v in values if v and v != '-' and v != 'nan']
+        return ' | '.join(sorted(set(values))) if values else ''
+
+    logistica_grouped = df_matriz.groupby(['municipio', 'uf']).agg({
+        'transporte': join_unique,
+        'frequencia': join_unique
+    }).reset_index()
+
+    # Criar chave para merge
+    df['_merge_key'] = df['_cidade_norm'] + '_' + df['_uf_norm']
+    logistica_grouped['_merge_key'] = logistica_grouped['municipio'] + '_' + logistica_grouped['uf']
+
+    # Merge via dicionário
+    logistica_dict_transporte = dict(zip(logistica_grouped['_merge_key'], logistica_grouped['transporte']))
+    logistica_dict_frequencia = dict(zip(logistica_grouped['_merge_key'], logistica_grouped['frequencia']))
+
+    df['transportadora'] = df['_merge_key'].map(logistica_dict_transporte).fillna('')
+    df['frequencia'] = df['_merge_key'].map(logistica_dict_frequencia).fillna('')
+
+    # Limpar colunas temporárias
+    df.drop(columns=['_cidade_norm', '_uf_norm', '_merge_key'], inplace=True)
+
+    return df
+
 @st.cache_data
 def load_data():
     """Carrega o arquivo Excel mais recente de cada pasta do SharePoint/OneDrive ou localmente"""
@@ -1140,7 +1202,11 @@ with st.spinner("Carregando dados..."):
     
     df_empresas = process_empresas(df_empresas_raw)
     df_labs = process_labs(df_labs_raw)
-    
+
+    # Enriquecer PCLs com dados de logística (transportadora e frequência)
+    df_matriz_logistica = load_matriz_logistica()
+    df_labs = enrich_pcls_with_logistics(df_labs, df_matriz_logistica)
+
     # ============================================
     # LISTA DE EXCEÇÕES - CNPJs a serem excluídos das análises
     # ============================================
@@ -1194,7 +1260,7 @@ with st.sidebar:
     st.markdown("**NAVEGAÇÃO**")
     tipo_analise = st.selectbox(
         "Módulo",
-        ["Visão Geral", "Visão por Estado", "Análise de Coletas", "Listagem de PCLs", "Listagem de Empresas", "Análises Específicas"],
+        ["Visão Geral", "Visão por Estado", "Análise de Coletas", "Listagem de PCLs", "Listagem de Empresas", "Análises Específicas", "Ajuda / FAQ"],
         label_visibility="collapsed",
         key="nav_selectbox"
     )
@@ -1784,14 +1850,16 @@ elif tipo_analise == "Listagem de PCLs":
         colunas_pcl = [
             'cnpj', 'razao_social', 'nome_fantasia', 'cidade', 'uf',
             'data_credenciamento', 'representante',
+            'transportadora', 'frequencia',
             'acumulado_coletas', 'acumulado_coletas_ano', 'data_ultima_coleta', 'status',
             'qtd_empresas_cidade'
         ]
-        
+
         rename_map_pcl = {
             'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'nome_fantasia': 'Nome Fantasia',
             'cidade': 'Cidade', 'uf': 'UF',
             'data_credenciamento': 'Data Credenciamento', 'representante': 'Representante',
+            'transportadora': 'Transportadora', 'frequencia': 'Frequência',
             'acumulado_coletas': 'Coletas Total', 'acumulado_coletas_ano': 'Coletas 2025',
             'data_ultima_coleta': 'Última Coleta', 'status': 'Status',
             'qtd_empresas_cidade': 'Empresas na Cidade'
@@ -1972,22 +2040,22 @@ elif tipo_analise == "Análises Específicas":
             if not df_result.empty:
                 st.success(f"✅ Encontrados {len(df_result)} PCLs em cidades sem empresas credenciadas")
                 
-                cols = ['cnpj', 'razao_social', 'nome_fantasia', 'cidade', 'uf', 'status', 'acumulado_coletas', 'data_ultima_coleta']
+                cols = ['cnpj', 'razao_social', 'nome_fantasia', 'cidade', 'uf', 'transportadora', 'frequencia', 'status', 'acumulado_coletas', 'data_ultima_coleta']
                 cols_available = [c for c in cols if c in df_result.columns]
-                
+
                 # Fallback: usar todas as colunas se nenhuma das esperadas existir
                 if not cols_available:
                     cols_available = df_result.columns.tolist()
-                
+
                 df_display = df_result[cols_available].copy()
-                
+
                 rename_map = {'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'nome_fantasia': 'Nome Fantasia',
-                              'cidade': 'Cidade', 'uf': 'UF', 'status': 'Status', 
-                              'acumulado_coletas': 'Coletas', 'data_ultima_coleta': 'Última Coleta'}
+                              'cidade': 'Cidade', 'uf': 'UF', 'transportadora': 'Transportadora', 'frequencia': 'Frequência',
+                              'status': 'Status', 'acumulado_coletas': 'Coletas', 'data_ultima_coleta': 'Última Coleta'}
                 df_display = df_display.rename(columns=rename_map)
-                
+
                 st.dataframe(df_display, width='stretch', hide_index=True, height=500)
-                
+
                 # Download
                 output = BytesIO()
                 with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -2030,16 +2098,16 @@ elif tipo_analise == "Análises Específicas":
                 
                 if not df_result.empty:
                     st.warning(f"⚠️ Encontrados {len(df_result)} PCLs em cidades onde todas as empresas estão inativas")
-                    
-                    cols = ['cnpj', 'razao_social', 'nome_fantasia', 'cidade', 'uf', 'status', 'acumulado_coletas', 'data_ultima_coleta']
+
+                    cols = ['cnpj', 'razao_social', 'nome_fantasia', 'cidade', 'uf', 'transportadora', 'frequencia', 'status', 'acumulado_coletas', 'data_ultima_coleta']
                     cols_available = [c for c in cols if c in df_result.columns]
-                    
+
                     # Fallback: usar todas as colunas se nenhuma das esperadas existir
                     if not cols_available:
                         cols_available = df_result.columns.tolist()
-                    
+
                     df_display = df_result[cols_available].copy()
-                    
+
                     # Adicionar quantidade de empresas inativas na cidade
                     # Criar mapeamento de cidade normalizada para original
                     cidade_map_norm_to_orig = dict(zip(df_empresas_norm['cidade'], df_empresas['cidade']))
@@ -2047,10 +2115,10 @@ elif tipo_analise == "Análises Específicas":
                     cidades_originais = {cidade_map_norm_to_orig.get(c, c) for c in cidades_empresas_inativas if c in cidade_map_norm_to_orig}
                     emp_count = df_empresas[df_empresas['cidade'].isin(cidades_originais)].groupby('cidade').size().to_dict()
                     df_display['empresas_inativas_cidade'] = df_display['cidade'].map(emp_count).fillna(0).astype(int)
-                    
+
                     rename_map = {'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'nome_fantasia': 'Nome Fantasia',
-                                  'cidade': 'Cidade', 'uf': 'UF', 'status': 'Status PCL', 
-                                  'acumulado_coletas': 'Coletas', 'data_ultima_coleta': 'Última Coleta',
+                                  'cidade': 'Cidade', 'uf': 'UF', 'transportadora': 'Transportadora', 'frequencia': 'Frequência',
+                                  'status': 'Status PCL', 'acumulado_coletas': 'Coletas', 'data_ultima_coleta': 'Última Coleta',
                                   'empresas_inativas_cidade': 'Empresas Inativas na Cidade'}
                     df_display = df_display.rename(columns=rename_map)
                     
@@ -2191,11 +2259,12 @@ elif tipo_analise == "Análises Específicas":
     elif analise_tipo == "Top PCLs por volume de coletas":
         if not df_labs.empty and 'acumulado_coletas' in df_labs.columns:
             top_pcls = df_labs.nlargest(50, 'acumulado_coletas')
-            cols = ['cnpj', 'razao_social', 'cidade', 'uf', 'acumulado_coletas', 'status']
+            cols = ['cnpj', 'razao_social', 'cidade', 'uf', 'transportadora', 'frequencia', 'acumulado_coletas', 'status']
             cols_available = [c for c in cols if c in top_pcls.columns]
             df_display = top_pcls[cols_available].copy()
-            rename_map = {'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'cidade': 'Cidade', 
-                          'uf': 'UF', 'acumulado_coletas': 'Total Coletas', 'status': 'Status'}
+            rename_map = {'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'cidade': 'Cidade',
+                          'uf': 'UF', 'transportadora': 'Transportadora', 'frequencia': 'Frequência',
+                          'acumulado_coletas': 'Total Coletas', 'status': 'Status'}
             df_display = df_display.rename(columns=rename_map)
             st.dataframe(df_display, width='stretch', hide_index=True, height=500)
     
@@ -2209,6 +2278,201 @@ elif tipo_analise == "Análises Específicas":
             cobertura.columns = ['UF', 'Cidades Atendidas', 'Total Coletas']
             cobertura = cobertura.sort_values('Cidades Atendidas')
             st.dataframe(cobertura, width='stretch', hide_index=True)
+
+elif tipo_analise == "Ajuda / FAQ":
+    create_section_header("❓", "Ajuda / FAQ", "Perguntas frequentes e orientações de uso")
+
+    # Tabs para organizar o conteúdo
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Navegação", "Entendendo os Dados", "Colunas e Métricas", "Análises", "Problemas Comuns"])
+
+    with tab1:
+        st.markdown("### Como navegar no dashboard?")
+        st.markdown("""
+        Use o menu **NAVEGAÇÃO** na barra lateral esquerda para acessar as diferentes seções:
+
+        | Seção | Descrição |
+        |-------|-----------|
+        | **Visão Geral** | Métricas gerais e gráficos comparativos por estado |
+        | **Visão por Estado** | Análise detalhada por UF |
+        | **Análise de Coletas** | Estatísticas de coletas realizadas |
+        | **Listagem de PCLs** | Tabela completa de laboratórios/pontos de coleta |
+        | **Listagem de Empresas** | Tabela completa de empresas credenciadas |
+        | **Análises Específicas** | Consultas customizadas para cenários específicos |
+        """)
+
+        st.markdown("### Como filtrar os dados?")
+        st.markdown("""
+        Use os filtros **ESTADO** e **CIDADE** na barra lateral para refinar os dados exibidos.
+        - Selecione "Todos" para ver todos os registros
+        - Os filtros afetam todas as seções e também os downloads em Excel
+        """)
+
+        st.markdown("### O que significam os ícones na sidebar?")
+        st.markdown("""
+        - ☁️ = Dados carregados do SharePoint (nuvem)
+        - 💻 = Dados carregados de arquivos locais
+        """)
+
+    with tab2:
+        st.markdown("### O que é um PCL?")
+        st.markdown("""
+        **PCL** (Ponto de Coleta/Laboratório) é um estabelecimento credenciado para realizar coletas de exames toxicológicos.
+        """)
+
+        st.markdown("### Qual a diferença entre PCL Ativo e Inativo?")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.success("**ATIVO**: Realizou coleta nos últimos **90 dias**")
+        with col2:
+            st.error("**INATIVO**: Sem coletas há mais de **90 dias**")
+
+        st.markdown("### Qual a diferença entre Empresa Ativa e Inativa?")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.success("**ATIVA**: Utilizou voucher nos últimos **365 dias**")
+        with col2:
+            st.error("**INATIVA**: Sem atividade há mais de **365 dias**")
+
+        st.markdown("### O que são Vouchers?")
+        st.markdown("""
+        Vouchers são créditos que empresas utilizam para pagar coletas de exames toxicológicos de seus funcionários.
+        """)
+
+        st.markdown("### Os dados são atualizados em tempo real?")
+        st.markdown("""
+        Não. Os dados são atualizados periodicamente (geralmente no último dia de cada mês).
+        A data da última atualização aparece no rodapé do dashboard.
+        """)
+
+    with tab3:
+        st.markdown("### Colunas da Listagem de PCLs")
+        st.markdown("""
+        | Coluna | Descrição |
+        |--------|-----------|
+        | **CNPJ** | Número de identificação fiscal do laboratório |
+        | **Razão Social** | Nome oficial registrado |
+        | **Nome Fantasia** | Nome comercial do estabelecimento |
+        | **Cidade / UF** | Localização do PCL |
+        | **Data Credenciamento** | Data em que o PCL foi credenciado |
+        | **Representante** | Representante comercial responsável |
+        | **Transportadora** | Empresas de transporte disponíveis na cidade |
+        | **Frequência** | Frequência de coleta (DIARIO, SEMANAL, etc.) |
+        | **Coletas Total** | Total histórico de coletas realizadas |
+        | **Coletas 2025** | Coletas realizadas no ano de 2025 |
+        | **Última Coleta** | Data da última coleta |
+        | **Status** | Ativo ou Inativo |
+        | **Empresas na Cidade** | Qtd. de empresas na mesma cidade |
+        """)
+
+        st.markdown("### O que significa quando Transportadora mostra múltiplos valores?")
+        st.info("Quando uma cidade possui mais de uma transportadora, elas são separadas por \" | \". Exemplo: **AIRLAB | BIOMED LOG | CORREIOS AP**")
+
+        st.markdown("### Valores de Frequência")
+        st.markdown("""
+        | Valor | Significado |
+        |-------|-------------|
+        | **DIARIO** | Coleta todos os dias úteis |
+        | **SEMANAL** | Coleta uma vez por semana |
+        | **2ª, 4ª E 6ª** | Coleta segundas, quartas e sextas |
+        | **3ª E 5ª** | Coleta terças e quintas |
+        | **ALTERNADO** | Coleta em dias alternados |
+        """)
+
+    with tab4:
+        st.markdown("### Análises Específicas Disponíveis")
+
+        with st.expander("1. PCLs em cidades SEM Empresas credenciadas"):
+            st.markdown("""
+            Lista laboratórios em cidades onde **não há nenhuma empresa cliente**.
+
+            **Utilidade:** Identificar PCLs que podem precisar de prospecção comercial na região.
+            """)
+
+        with st.expander("2. PCLs em cidades COM Empresas INATIVAS (365 dias)"):
+            st.markdown("""
+            Lista laboratórios em cidades onde **todas as empresas estão inativas** (sem vouchers há mais de 365 dias).
+
+            **Utilidade:** Indica oportunidades de reativação de clientes.
+            """)
+
+        with st.expander("3. Empresas em cidades SEM PCL credenciado"):
+            st.markdown("""
+            Lista empresas que **não têm laboratório disponível** em sua cidade.
+
+            **Utilidade:** Indica necessidade de credenciar novos PCLs para atender essas empresas.
+            """)
+
+        with st.expander("4. Empresas em cidades COM PCL INATIVO (90 dias)"):
+            st.markdown("""
+            Lista empresas em cidades onde **todos os PCLs estão inativos** (sem coletas há mais de 90 dias).
+
+            **Utilidade:** Indica risco de perda de clientes por falta de atendimento ativo.
+            """)
+
+        with st.expander("5. Top PCLs por volume de coletas"):
+            st.markdown("""
+            Ranking dos **50 PCLs com maior volume** de coletas realizadas.
+
+            **Utilidade:** Identificar os principais parceiros e laboratórios mais ativos.
+            """)
+
+        with st.expander("6. Estados com menor cobertura"):
+            st.markdown("""
+            Lista estados ordenados por **quantidade de cidades atendidas** (menor para maior).
+
+            **Utilidade:** Identificar oportunidades de expansão territorial.
+            """)
+
+    with tab5:
+        st.markdown("### Problemas Comuns e Soluções")
+
+        with st.expander("O dashboard está lento"):
+            st.markdown("""
+            - Verifique sua conexão com a internet
+            - Recarregue a página (F5)
+            - Limpe o cache do navegador se o problema persistir
+            """)
+
+        with st.expander("Os dados parecem desatualizados"):
+            st.markdown("""
+            1. Verifique a data de atualização no rodapé
+            2. Pressione F5 para forçar nova leitura dos dados
+            3. Verifique se os arquivos fonte foram atualizados
+            """)
+
+        with st.expander("Erro: Arquivo está aberto em outro programa"):
+            st.markdown("""
+            Isso ocorre quando o arquivo Excel está aberto em outro programa.
+
+            **Solução:** Feche o Excel e recarregue a página.
+            """)
+
+        with st.expander("Transportadora/Frequência aparecem vazias"):
+            st.markdown("""
+            Possíveis causas:
+            - O arquivo `CONSULTA MATRIZ LOGISTICA.1.xlsx` não está presente
+            - A cidade do PCL não está cadastrada na matriz logística
+            - O nome da cidade pode estar escrito de forma diferente
+            """)
+
+        with st.expander("Uma cidade não aparece nos resultados"):
+            st.markdown("""
+            - Verifique se o nome está escrito corretamente
+            - Cidades podem ter nomes diferentes (ex: "SAO PAULO" vs "SÃO PAULO")
+            - O sistema normaliza os nomes, mas diferenças significativas podem impedir o match
+            """)
+
+        st.markdown("---")
+        st.markdown("### Glossário")
+        st.markdown("""
+        | Termo | Definição |
+        |-------|-----------|
+        | **PCL** | Ponto de Coleta/Laboratório credenciado |
+        | **Voucher** | Crédito para pagamento de coletas |
+        | **Credenciamento** | Cadastro e autorização no sistema |
+        | **Status Ativo** | Entidade com atividade recente |
+        | **Status Inativo** | Entidade sem atividade por período prolongado |
+        """)
 
 # ============================================
 # RODAPÉ

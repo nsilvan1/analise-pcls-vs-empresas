@@ -90,39 +90,31 @@ def create_metric_card(title, value, subtitle="", trend=None, trend_color="green
         delta = None
         if trend:
             delta = trend
-        
+
         st.metric(
             label=title,
             value=value,
             delta=delta
         )
-        
+
         if subtitle:
             st.caption(subtitle)
     except Exception as e:
-        # Fallback para HTML simples
-        try:
-            html_card = f'<div style="background:#FFFFFF;border:1px solid #E4E4E7;border-radius:12px;padding:1rem;"><p style="font-size:11px;color:#71717A;margin:0 0 0.5rem 0;">{title}</p><h3 style="font-size:1.5rem;color:#09090B;margin:0;">{value}</h3><p style="font-size:12px;color:#71717A;margin:0.5rem 0 0 0;">{subtitle}</p></div>'
-            st.markdown(html_card, unsafe_allow_html=True)
-        except:
-            st.write(f"**{title}**: {value}")
-            if subtitle:
-                st.caption(subtitle)
+        # Fallback simples sem HTML
+        st.write(f"**{title}**: {value}")
+        if subtitle:
+            st.caption(subtitle)
 
 def create_section_header(icon, title, subtitle=""):
     """Cria um cabeçalho de seção moderno"""
     try:
         title_clean = str(title).replace('"', '').replace("'", "")
         icon_clean = str(icon).replace('"', '').replace("'", "")
-        
+
+        # Usar markdown nativo do Streamlit que respeita o tema
+        st.markdown(f"## {icon_clean} {title_clean}")
         if subtitle:
-            subtitle_clean = str(subtitle).replace('"', '').replace("'", "")
-            sub_html = f'<p style="color:#71717A;font-size:14px;margin:0.25rem 0 0 0;">{subtitle_clean}</p>'
-        else:
-            sub_html = ""
-        
-        header_html = f'<div style="margin-bottom:1.5rem;"><h2 style="font-size:1.5rem;font-weight:600;color:#18181B;margin:0;">{icon_clean} {title_clean}</h2>{sub_html}</div>'
-        st.markdown(header_html, unsafe_allow_html=True)
+            st.caption(subtitle)
     except Exception as e:
         st.error(f"Erro: {str(e)}")
 
@@ -135,16 +127,16 @@ def create_bar_chart(df, x_col, y_col, title, max_items=12, color='#22C55E'):
     df_chart = df.copy()
     df_chart = df_chart.sort_values(y_col, ascending=False).head(max_items)
     df_chart = df_chart.sort_values(y_col, ascending=True)
-    
+
     # Limpar valores NaN/None
     df_chart[y_col] = df_chart[y_col].fillna(0)
     df_chart[y_col] = df_chart[y_col].replace([np.inf, -np.inf], 0)
-    
+
     fig = go.Figure()
-    
+
     valores_x = [float(x) if pd.notna(x) and np.isfinite(x) else 0.0 for x in df_chart[y_col]]
     valores_y = [str(y) if pd.notna(y) else "" for y in df_chart[x_col]]
-    
+
     fig.add_trace(go.Bar(
         x=valores_x,
         y=valores_y,
@@ -155,17 +147,16 @@ def create_bar_chart(df, x_col, y_col, title, max_items=12, color='#22C55E'):
         ),
         text=[format_number(x) for x in valores_x],
         textposition='outside',
-        textfont=dict(size=11, color='#3F3F46', family='Inter'),
         hovertemplate=f'<b>%{{y}}</b><br>{y_col}: %{{x:,.0f}}<extra></extra>'
     ))
-    
+
     num_items = len(df_chart)
     height = max(350, num_items * 32 + 80)
-    
+
     fig.update_layout(
         title=dict(
             text=title,
-            font=dict(size=15, color='#18181B', family='Inter'),
+            font=dict(size=15),
             x=0.5,
             xanchor='center',
             y=0.97
@@ -173,55 +164,52 @@ def create_bar_chart(df, x_col, y_col, title, max_items=12, color='#22C55E'):
         xaxis=dict(
             title="",
             showgrid=True,
-            gridcolor='#F4F4F5',
+            gridcolor='rgba(128,128,128,0.2)',
             showline=False,
-            zeroline=False,
-            tickfont=dict(size=11, color='#71717A', family='Inter')
+            zeroline=False
         ),
         yaxis=dict(
             title="",
-            showline=False,
-            tickfont=dict(size=12, color='#3F3F46', family='Inter')
+            showline=False
         ),
-        plot_bgcolor='#FFFFFF',
-        paper_bgcolor='#FFFFFF',
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
         height=height,
         margin=dict(l=10, r=60, t=50, b=20),
-        showlegend=False,
-        font=dict(family='Inter')
+        showlegend=False
     )
-    
+
     return fig
 
 def create_grouped_bar_chart(df, x_col, title, colors=None, max_items=10):
     """Cria gráfico de barras agrupadas"""
     if colors is None:
         colors = {'Ativo': '#22C55E', 'Inativo': '#EF4444'}
-    
+
     try:
         df_chart = df.groupby([x_col, 'status']).size().reset_index(name='Quantidade')
         df_pivot = df_chart.pivot(index=x_col, columns='status', values='Quantidade').fillna(0)
-        
+
         # Garantir que valores sejam numéricos válidos
         for col in df_pivot.columns:
             df_pivot[col] = pd.to_numeric(df_pivot[col], errors='coerce').fillna(0)
-        
+
         if 'Ativo' in df_pivot.columns and 'Inativo' in df_pivot.columns:
             df_pivot['Total'] = df_pivot['Ativo'] + df_pivot['Inativo']
         elif 'Ativo' in df_pivot.columns:
             df_pivot['Total'] = df_pivot['Ativo']
         else:
             df_pivot['Total'] = 0
-        
+
         df_pivot = df_pivot.sort_values('Total', ascending=False).head(max_items)
         df_pivot = df_pivot.drop('Total', axis=1)
         df_pivot = df_pivot.sort_values(df_pivot.columns[0] if len(df_pivot.columns) > 0 else df_pivot.index)
     except Exception as e:
         st.error(f"Erro ao processar dados para gráfico: {str(e)}")
         return go.Figure()
-    
+
     fig = go.Figure()
-    
+
     if 'Ativo' in df_pivot.columns:
         valores_ativos = [float(x) if pd.notna(x) and np.isfinite(x) else 0.0 for x in df_pivot['Ativo']]
         fig.add_trace(go.Bar(
@@ -232,10 +220,9 @@ def create_grouped_bar_chart(df, x_col, title, colors=None, max_items=10):
             marker=dict(color=colors.get('Ativo', '#22C55E')),
             text=[format_number(int(x)) for x in valores_ativos],
             textposition='outside',
-            textfont=dict(size=10, color='#3F3F46', family='Inter'),
             hovertemplate='<b>%{y}</b><br>Ativos: %{x:,.0f}<extra></extra>'
         ))
-    
+
     if 'Inativo' in df_pivot.columns:
         valores_inativos = [float(x) if pd.notna(x) and np.isfinite(x) else 0.0 for x in df_pivot['Inativo']]
         fig.add_trace(go.Bar(
@@ -246,17 +233,16 @@ def create_grouped_bar_chart(df, x_col, title, colors=None, max_items=10):
             marker=dict(color=colors.get('Inativo', '#EF4444')),
             text=[format_number(int(x)) for x in valores_inativos],
             textposition='outside',
-            textfont=dict(size=10, color='#3F3F46', family='Inter'),
             hovertemplate='<b>%{y}</b><br>Inativos: %{x:,.0f}<extra></extra>'
         ))
-    
+
     num_items = len(df_pivot)
     height = max(400, num_items * 40 + 100)
-    
+
     fig.update_layout(
         title=dict(
             text=title,
-            font=dict(size=15, color='#18181B', family='Inter'),
+            font=dict(size=15),
             x=0.5,
             xanchor='center',
             y=0.97
@@ -264,19 +250,17 @@ def create_grouped_bar_chart(df, x_col, title, colors=None, max_items=10):
         xaxis=dict(
             title="",
             showgrid=True,
-            gridcolor='#F4F4F5',
+            gridcolor='rgba(128,128,128,0.2)',
             showline=False,
-            zeroline=False,
-            tickfont=dict(size=11, color='#71717A', family='Inter')
+            zeroline=False
         ),
         yaxis=dict(
             title="",
-            showline=False,
-            tickfont=dict(size=12, color='#3F3F46', family='Inter')
+            showline=False
         ),
         barmode='group',
-        plot_bgcolor='#FFFFFF',
-        paper_bgcolor='#FFFFFF',
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
         height=height,
         margin=dict(l=10, r=70, t=50, b=20),
         legend=dict(
@@ -285,14 +269,12 @@ def create_grouped_bar_chart(df, x_col, title, colors=None, max_items=10):
             y=1.02,
             xanchor="center",
             x=0.5,
-            font=dict(size=12, color='#3F3F46', family='Inter'),
-            bgcolor='rgba(255,255,255,0)'
+            bgcolor='rgba(0,0,0,0)'
         ),
-        font=dict(family='Inter'),
         bargap=0.3,
         bargroupgap=0.1
     )
-    
+
     return fig
 
 def create_progress_card(title, value, total, color="#22C55E"):
@@ -322,41 +304,41 @@ def create_top_list_card(title, data_dict, color="#22C55E"):
     """Cria um card com lista de top items usando gráfico simples"""
     try:
         if not data_dict or len(data_dict) == 0:
-            st.markdown(f'<p style="font-size:12px;font-weight:600;color:#71717A;">{title}</p><p style="color:#71717A;">Sem dados</p>', unsafe_allow_html=True)
+            st.markdown(f"**{title}**")
+            st.caption("Sem dados")
             return
-        
+
         # Converter dict para DataFrame
         df_top = pd.DataFrame(list(data_dict.items())[:5], columns=['UF', 'Quantidade'])
         df_top = df_top.sort_values('Quantidade', ascending=False)
-        
+
         # Criar gráfico de barras horizontal simples
         fig = go.Figure()
-        
+
         valores = [float(x) if pd.notna(x) and np.isfinite(x) else 0.0 for x in df_top['Quantidade']]
         ufs = [str(x) if pd.notna(x) else "" for x in df_top['UF']]
-        
+
         fig.add_trace(go.Bar(
             x=valores,
             y=ufs,
             orientation='h',
             marker=dict(color=color),
             text=[format_number(int(x)) for x in valores],
-            textposition='outside',
-            textfont=dict(size=11, color='#3F3F46', family='Inter')
+            textposition='outside'
         ))
-        
+
         fig.update_layout(
-            title=dict(text=title, font=dict(size=13, color='#18181B', family='Inter'), x=0.5),
-            xaxis=dict(title="", showgrid=True, gridcolor='#F4F4F5', tickfont=dict(size=10, color='#71717A')),
-            yaxis=dict(title="", tickfont=dict(size=11, color='#3F3F46')),
-            plot_bgcolor='#FFFFFF',
-            paper_bgcolor='#FFFFFF',
+            title=dict(text=title, font=dict(size=13), x=0.5),
+            xaxis=dict(title="", showgrid=True, gridcolor='rgba(128,128,128,0.2)'),
+            yaxis=dict(title=""),
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
             height=220,
             margin=dict(l=10, r=60, t=40, b=10),
             showlegend=False
         )
-        
-        st.plotly_chart(fig, width='stretch')
+
+        st.plotly_chart(fig, use_container_width=True)
     except Exception as e:
         st.error(f"Erro: {str(e)}")
 
@@ -1057,7 +1039,7 @@ with col_user:
         display_name = user.get('displayName', 'Usuário')
         col_nome, col_btn = st.columns([2, 1])
         with col_nome:
-            st.markdown(f"<p style='margin: 0; padding-top: 8px; font-size: 14px; text-align: right;'>👤 {display_name}</p>", unsafe_allow_html=True)
+            st.markdown(f"👤 {display_name}")
         with col_btn:
             if st.button("Sair", key="logout_btn", type="secondary"):
                 AuthManager.logout()
@@ -1195,13 +1177,13 @@ with tab_visao_geral:
         if not df_labs.empty and 'uf' in df_labs.columns:
             df_estado = df_labs.groupby('uf').size().reset_index(name='Quantidade')
             fig = create_bar_chart(df_estado, 'uf', 'Quantidade', "PCLs por Estado", max_items=12, color='#22C55E')
-            st.plotly_chart(fig, width='stretch')
+            st.plotly_chart(fig, use_container_width=True)
     
     with col2:
         if not df_empresas.empty and 'uf' in df_empresas.columns:
             df_estado = df_empresas.groupby('uf').size().reset_index(name='Quantidade')
             fig = create_bar_chart(df_estado, 'uf', 'Quantidade', "Empresas por Estado", max_items=12, color='#3B82F6')
-            st.plotly_chart(fig, width='stretch')
+            st.plotly_chart(fig, use_container_width=True)
     
     st.markdown("")
     
@@ -1213,12 +1195,12 @@ with tab_visao_geral:
     with col1:
         if not df_labs.empty and 'uf' in df_labs.columns:
             fig = create_grouped_bar_chart(df_labs, 'uf', "PCLs: Ativos vs Inativos", max_items=10)
-            st.plotly_chart(fig, width='stretch')
+            st.plotly_chart(fig, use_container_width=True)
     
     with col2:
         if not df_empresas.empty and 'uf' in df_empresas.columns:
             fig = create_grouped_bar_chart(df_empresas, 'uf', "Empresas: Ativas vs Inativas", max_items=10)
-            st.plotly_chart(fig, width='stretch')
+            st.plotly_chart(fig, use_container_width=True)
 
 with tab_visao_estado:
     create_section_header("🗺️", "Visão por Estado", "Painel consolidado com métricas por UF")
@@ -1312,7 +1294,7 @@ with tab_visao_estado:
             if not df_labs_uf.empty and 'cidade' in df_labs_uf.columns:
                 df_cidade_pcl = df_labs_uf.groupby('cidade').size().reset_index(name='Quantidade')
                 fig = create_bar_chart(df_cidade_pcl, 'cidade', 'Quantidade', f"PCLs por Cidade - {estado_filtro}", max_items=10, color='#22C55E')
-                st.plotly_chart(fig, width='stretch')
+                st.plotly_chart(fig, use_container_width=True)
             else:
                 st.info("Sem dados de PCLs para este estado.")
         
@@ -1320,7 +1302,7 @@ with tab_visao_estado:
             if not df_empresas_uf.empty and 'cidade' in df_empresas_uf.columns:
                 df_cidade_emp = df_empresas_uf.groupby('cidade').size().reset_index(name='Quantidade')
                 fig = create_bar_chart(df_cidade_emp, 'cidade', 'Quantidade', f"Empresas por Cidade - {estado_filtro}", max_items=10, color='#3B82F6')
-                st.plotly_chart(fig, width='stretch')
+                st.plotly_chart(fig, use_container_width=True)
             else:
                 st.info("Sem dados de empresas para este estado.")
         
@@ -1389,7 +1371,7 @@ with tab_visao_estado:
         
         tabela_resumo = tabela_resumo.sort_values('PCLs', ascending=False)
         
-        st.dataframe(tabela_resumo, width='stretch', hide_index=True, height=500)
+        st.dataframe(tabela_resumo, use_container_width=True, hide_index=True, height=500)
         
         # Download
         output = BytesIO()
@@ -1461,7 +1443,7 @@ with tab_analise_coletas:
                 # Gráfico de Total de Coletas por Estado
                 df_chart = coletas_estado[['UF', 'Total Coletas']].head(12)
                 df_chart = df_chart.sort_values('Total Coletas', ascending=True)
-                
+
                 fig = go.Figure()
                 valores_x = [float(x) if pd.notna(x) and np.isfinite(x) else 0.0 for x in df_chart['Total Coletas']]
                 valores_y = [str(y) if pd.notna(y) else "" for y in df_chart['UF']]
@@ -1471,26 +1453,25 @@ with tab_analise_coletas:
                     orientation='h',
                     marker=dict(color='#22C55E'),
                     text=[format_number(int(x)) for x in valores_x],
-                    textposition='outside',
-                    textfont=dict(size=11, color='#3F3F46', family='Inter')
+                    textposition='outside'
                 ))
-                
+
                 fig.update_layout(
-                    title=dict(text="Total de Coletas por Estado (Top 12)", font=dict(size=15, color='#18181B', family='Inter'), x=0.5),
-                    xaxis=dict(title="", showgrid=True, gridcolor='#F4F4F5', tickfont=dict(size=11, color='#71717A')),
-                    yaxis=dict(title="", tickfont=dict(size=12, color='#3F3F46')),
-                    plot_bgcolor='#FFFFFF',
-                    paper_bgcolor='#FFFFFF',
+                    title=dict(text="Total de Coletas por Estado (Top 12)", font=dict(size=15), x=0.5),
+                    xaxis=dict(title="", showgrid=True, gridcolor='rgba(128,128,128,0.2)'),
+                    yaxis=dict(title=""),
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    paper_bgcolor='rgba(0,0,0,0)',
                     height=450,
                     margin=dict(l=10, r=70, t=50, b=20)
                 )
-                st.plotly_chart(fig, width='stretch')
-            
+                st.plotly_chart(fig, use_container_width=True)
+
             with col2:
                 # Gráfico de Média de Coletas por Estado
                 df_chart = coletas_estado[['UF', 'Média por PCL']].head(12)
                 df_chart = df_chart.sort_values('Média por PCL', ascending=True)
-                
+
                 fig = go.Figure()
                 valores_x = [float(x) if pd.notna(x) and np.isfinite(x) else 0.0 for x in df_chart['Média por PCL']]
                 valores_y = [str(y) if pd.notna(y) else "" for y in df_chart['UF']]
@@ -1500,20 +1481,19 @@ with tab_analise_coletas:
                     orientation='h',
                     marker=dict(color='#3B82F6'),
                     text=[f"{x:.1f}" for x in valores_x],
-                    textposition='outside',
-                    textfont=dict(size=11, color='#3F3F46', family='Inter')
+                    textposition='outside'
                 ))
-                
+
                 fig.update_layout(
-                    title=dict(text="Média de Coletas por PCL (Top 12)", font=dict(size=15, color='#18181B', family='Inter'), x=0.5),
-                    xaxis=dict(title="", showgrid=True, gridcolor='#F4F4F5', tickfont=dict(size=11, color='#71717A')),
-                    yaxis=dict(title="", tickfont=dict(size=12, color='#3F3F46')),
-                    plot_bgcolor='#FFFFFF',
-                    paper_bgcolor='#FFFFFF',
+                    title=dict(text="Média de Coletas por PCL (Top 12)", font=dict(size=15), x=0.5),
+                    xaxis=dict(title="", showgrid=True, gridcolor='rgba(128,128,128,0.2)'),
+                    yaxis=dict(title=""),
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    paper_bgcolor='rgba(0,0,0,0)',
                     height=450,
                     margin=dict(l=10, r=70, t=50, b=20)
                 )
-                st.plotly_chart(fig, width='stretch')
+                st.plotly_chart(fig, use_container_width=True)
             
             st.markdown("---")
             
@@ -1526,7 +1506,7 @@ with tab_analise_coletas:
             
             st.dataframe(
                 coletas_estado,
-                width='stretch',
+                use_container_width=True,
                 hide_index=True,
                 height=400
             )
@@ -1552,7 +1532,7 @@ with tab_analise_coletas:
                 
                 st.dataframe(
                     top_pcls,
-                    width='stretch',
+                    use_container_width=True,
                     hide_index=True,
                     height=500
                 )
@@ -1629,7 +1609,7 @@ with tab_listagem_pcls:
         df_final = prepare_display_dataframe(df_display, colunas_pcl, rename_map_pcl)
         
         if not df_final.empty:
-            st.dataframe(df_final, width='stretch', hide_index=True, height=500)
+            st.dataframe(df_final, use_container_width=True, hide_index=True, height=500)
         else:
             st.warning("Nenhum dado disponível para exibição.")
         
@@ -1735,7 +1715,7 @@ with tab_listagem_empresas:
         df_final = prepare_display_dataframe(df_display, colunas_empresa, rename_map_empresa)
         
         if not df_final.empty:
-            st.dataframe(df_final, width='stretch', hide_index=True, height=500)
+            st.dataframe(df_final, use_container_width=True, hide_index=True, height=500)
         else:
             st.warning("Nenhum dado disponível para exibição.")
         
@@ -1802,7 +1782,7 @@ with tab_analises_especificas:
                               'status': 'Status', 'acumulado_coletas': 'Coletas', 'data_ultima_coleta': 'Última Coleta'}
                 df_display = df_display.rename(columns=rename_map)
 
-                st.dataframe(df_display, width='stretch', hide_index=True, height=500)
+                st.dataframe(df_display, use_container_width=True, hide_index=True, height=500)
 
                 # Download
                 output = BytesIO()
@@ -1870,7 +1850,7 @@ with tab_analises_especificas:
                                   'empresas_inativas_cidade': 'Empresas Inativas na Cidade'}
                     df_display = df_display.rename(columns=rename_map)
                     
-                    st.dataframe(df_display, width='stretch', hide_index=True, height=500)
+                    st.dataframe(df_display, use_container_width=True, hide_index=True, height=500)
                     
                     output = BytesIO()
                     with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -1921,7 +1901,7 @@ with tab_analises_especificas:
                               'acumulado_vouchers': 'Vouchers', 'data_ultima_utilizacao': 'Última Utilização'}
                 df_display = df_display.rename(columns=rename_map)
                 
-                st.dataframe(df_display, width='stretch', hide_index=True, height=500)
+                st.dataframe(df_display, use_container_width=True, hide_index=True, height=500)
                 
                 output = BytesIO()
                 with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -1988,7 +1968,7 @@ with tab_analises_especificas:
                                   'pcls_inativos_cidade': 'PCLs Inativos na Cidade'}
                     df_display = df_display.rename(columns=rename_map)
                     
-                    st.dataframe(df_display, width='stretch', hide_index=True, height=500)
+                    st.dataframe(df_display, use_container_width=True, hide_index=True, height=500)
                     
                     output = BytesIO()
                     with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -2014,7 +1994,7 @@ with tab_analises_especificas:
                           'uf': 'UF', 'transportadora': 'Transportadora', 'frequencia': 'Frequência',
                           'acumulado_coletas': 'Total Coletas', 'status': 'Status'}
             df_display = df_display.rename(columns=rename_map)
-            st.dataframe(df_display, width='stretch', hide_index=True, height=500)
+            st.dataframe(df_display, use_container_width=True, hide_index=True, height=500)
     
     # Estados com menor cobertura
     elif analise_tipo == "Estados com menor cobertura":
@@ -2025,7 +2005,7 @@ with tab_analises_especificas:
             }).reset_index()
             cobertura.columns = ['UF', 'Cidades Atendidas', 'Total Coletas']
             cobertura = cobertura.sort_values('Cidades Atendidas')
-            st.dataframe(cobertura, width='stretch', hide_index=True)
+            st.dataframe(cobertura, use_container_width=True, hide_index=True)
 
 with tab_ajuda:
     create_section_header("❓", "Ajuda / FAQ", "Perguntas frequentes e orientações de uso")

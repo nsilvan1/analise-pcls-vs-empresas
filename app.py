@@ -519,6 +519,69 @@ def enrich_pcls_with_logistics(df_labs, df_matriz):
     return df
 
 @st.cache_data
+def get_empresas_por_cidade(df_empresas):
+    """Cache de contagem de empresas por cidade"""
+    if df_empresas.empty or 'cidade' not in df_empresas.columns:
+        return {}, {}, {}
+
+    empresas_por_cidade = df_empresas.groupby('cidade').size().to_dict()
+
+    if 'status' in df_empresas.columns:
+        empresas_ativas_cidade = df_empresas[df_empresas['status'] == 'Ativo'].groupby('cidade').size().to_dict()
+    else:
+        empresas_ativas_cidade = {}
+
+    if 'acumulado_vouchers' in df_empresas.columns:
+        empresas_com_voucher = df_empresas[df_empresas['acumulado_vouchers'].fillna(0) > 0].groupby('cidade').size().to_dict()
+    else:
+        empresas_com_voucher = {}
+
+    return empresas_por_cidade, empresas_ativas_cidade, empresas_com_voucher
+
+@st.cache_data
+def get_pcls_por_cidade(df_labs):
+    """Cache de contagem de PCLs por cidade"""
+    if df_labs.empty or 'cidade' not in df_labs.columns:
+        return {}, {}
+
+    pcls_por_cidade = df_labs.groupby('cidade').size().to_dict()
+
+    if 'status' in df_labs.columns:
+        pcls_ativos_cidade = df_labs[df_labs['status'] == 'Ativo'].groupby('cidade').size().to_dict()
+    else:
+        pcls_ativos_cidade = {}
+
+    return pcls_por_cidade, pcls_ativos_cidade
+
+@st.cache_data
+def get_listas_filtros(df_labs, df_empresas):
+    """Cache das listas de estados e cidades para filtros"""
+    # PCLs
+    if not df_labs.empty and 'uf' in df_labs.columns:
+        estados_pcl = sorted(df_labs['uf'].dropna().unique().tolist())
+        cidades_pcl = sorted(df_labs['cidade'].dropna().unique().tolist()) if 'cidade' in df_labs.columns else []
+        cidades_por_estado_pcl = df_labs.groupby('uf')['cidade'].apply(lambda x: sorted(x.dropna().unique().tolist())).to_dict()
+    else:
+        estados_pcl = []
+        cidades_pcl = []
+        cidades_por_estado_pcl = {}
+
+    # Empresas
+    if not df_empresas.empty and 'uf' in df_empresas.columns:
+        estados_emp = sorted(df_empresas['uf'].dropna().unique().tolist())
+        cidades_emp = sorted(df_empresas['cidade'].dropna().unique().tolist()) if 'cidade' in df_empresas.columns else []
+        cidades_por_estado_emp = df_empresas.groupby('uf')['cidade'].apply(lambda x: sorted(x.dropna().unique().tolist())).to_dict()
+    else:
+        estados_emp = []
+        cidades_emp = []
+        cidades_por_estado_emp = {}
+
+    return {
+        'pcl': {'estados': estados_pcl, 'cidades': cidades_pcl, 'cidades_por_estado': cidades_por_estado_pcl},
+        'empresa': {'estados': estados_emp, 'cidades': cidades_emp, 'cidades_por_estado': cidades_por_estado_emp}
+    }
+
+@st.cache_data
 def load_data():
     """Carrega o arquivo Excel mais recente de cada pasta do SharePoint/OneDrive ou localmente"""
     empresas_data = None
@@ -880,13 +943,18 @@ def normalize_city_column(df, column='cidade'):
     return df
 
 def apply_filters(df, estado, cidade):
-    """Aplica filtros ao dataframe"""
-    df_filtered = df.copy()
-    if estado != "Todos" and 'uf' in df_filtered.columns:
-        df_filtered = df_filtered[df_filtered['uf'] == estado]
-    if cidade != "Todas" and 'cidade' in df_filtered.columns:
-        df_filtered = df_filtered[df_filtered['cidade'] == cidade]
-    return df_filtered
+    """Aplica filtros ao dataframe (sem copiar desnecessariamente)"""
+    if estado == "Todos" and cidade == "Todas":
+        return df
+
+    mask = pd.Series([True] * len(df), index=df.index)
+
+    if estado != "Todos" and 'uf' in df.columns:
+        mask &= (df['uf'] == estado)
+    if cidade != "Todas" and 'cidade' in df.columns:
+        mask &= (df['cidade'] == cidade)
+
+    return df[mask]
 
 def prepare_display_dataframe(df, colunas_desejadas, rename_map):
     """
@@ -966,99 +1034,53 @@ with st.spinner("Carregando dados..."):
     #     df_empresas = df_empresas[~df_empresas['cnpj'].isin(CNPJS_EXCLUIDOS)]
 
 # ============================================
-# SIDEBAR
+# PRÉ-CALCULAR DADOS PARA PERFORMANCE
+# ============================================
+# Cachear cálculos pesados para evitar reprocessamento
+empresas_por_cidade, empresas_ativas_cidade, empresas_com_voucher = get_empresas_por_cidade(df_empresas)
+pcls_por_cidade, pcls_ativos_cidade = get_pcls_por_cidade(df_labs)
+listas_filtros = get_listas_filtros(df_labs, df_empresas)
+
+# ============================================
+# HEADER - USUÁRIO E LOGOUT NO TOPO
 # ============================================
 
-with st.sidebar:
-    st.markdown("""
-    <div style="text-align: center; padding: 1rem 0;">
-        <h3 style="margin: 0; font-size: 1.25rem;">📊 CTOX Analytics</h3>
-        <p style="margin: 0.5rem 0 0 0; font-size: 12px; color: #71717A;">Painel de Análise</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Informações do usuário logado
+# Header com título e usuário
+col_titulo, col_user = st.columns([3, 1])
+
+with col_titulo:
+    st.markdown("## 📊 CTOX Analytics")
+
+with col_user:
     user = AuthManager.get_current_user()
     if user:
         display_name = user.get('displayName', 'Usuário')
-        email = user.get('mail') or user.get('userPrincipalName', '')
-        st.markdown(f"""
-        <div style="text-align: center; padding: 0.5rem; background: rgba(107, 191, 71, 0.1); border-radius: 8px; margin-bottom: 0.5rem;">
-            <p style="margin: 0; font-size: 12px; color: #52B54B;">👤 {display_name}</p>
-            <p style="margin: 0; font-size: 10px; color: #71717A;">{email}</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        if st.button("🚪 Sair", key="logout_btn"):
-            AuthManager.logout()
-            st.rerun()
-    
-    st.markdown("---")
-    
-    # Menu de navegação
-    st.markdown("**NAVEGAÇÃO**")
-    tipo_analise = st.selectbox(
-        "Módulo",
-        ["Visão Geral", "Visão por Estado", "Análise de Coletas", "Listagem de PCLs", "Listagem de Empresas", "Análises Específicas", "Ajuda / FAQ"],
-        label_visibility="collapsed",
-        key="nav_selectbox"
-    )
-    
-    st.markdown("---")
-    
-    # Filtros
-    st.markdown("**FILTROS**")
-    
-    if not df_labs.empty:
-        estados_disponiveis = sorted(df_labs['uf'].dropna().unique().tolist()) if 'uf' in df_labs.columns else []
-        cidades_disponiveis = sorted(df_labs['cidade'].dropna().unique().tolist()) if 'cidade' in df_labs.columns else []
-    else:
-        estados_disponiveis = []
-        cidades_disponiveis = []
-    
-    estado_selecionado = st.selectbox("Estado (UF)", ["Todos"] + estados_disponiveis) if estados_disponiveis else "Todos"
-    cidade_selecionada = st.selectbox("Cidade", ["Todas"] + cidades_disponiveis) if cidades_disponiveis else "Todas"
-    
-    st.markdown("---")
-    
-    # Info dos arquivos
-    st.markdown("**FONTES DE DADOS**")
+        col_nome, col_btn = st.columns([2, 1])
+        with col_nome:
+            st.markdown(f"<p style='margin: 0; padding-top: 8px; font-size: 14px; text-align: right;'>👤 {display_name}</p>", unsafe_allow_html=True)
+        with col_btn:
+            if st.button("Sair", key="logout_btn", type="secondary"):
+                AuthManager.logout()
+                st.rerun()
 
-    # Indicador de origem (SharePoint ou Local)
-    if file_info.get('labs_source') == 'sharepoint' or file_info.get('empresas_source') == 'sharepoint':
-        st.markdown("☁️ **SharePoint Online**")
-    else:
-        st.markdown("💻 **Local**")
-
-    if file_info['labs_file']:
-        source_icon = "☁️" if file_info.get('labs_source') == 'sharepoint' else "💻"
-        st.caption(f"{source_icon} PCLs: {file_info['labs_file']}")
-    if file_info['empresas_file']:
-        source_icon = "☁️" if file_info.get('empresas_source') == 'sharepoint' else "💻"
-        st.caption(f"{source_icon} Empresas: {file_info['empresas_file']}")
-
-    # Status da Matriz Logística
-    if matriz_status['loaded']:
-        loaded_at = matriz_status.get('loaded_at')
-        if loaded_at:
-            loaded_at_str = loaded_at.strftime("%d/%m/%Y %H:%M")
-            st.caption(f"☁️ Matriz Logística: {matriz_status['records']} rotas (atualizada em {loaded_at_str})")
-        else:
-            st.caption(f"☁️ Matriz Logística: {matriz_status['records']} rotas")
-    else:
-        st.caption(f"⚠️ Matriz Logística: Não carregada")
-        if matriz_status.get('error'):
-            st.caption(f"   Erro: {matriz_status['error'][:50]}...")
-
-    # Mostrar quantos registros foram excluídos
-    if pcls_excluidos > 0:
-        st.caption(f"🚫 {pcls_excluidos} PCL(s) excluído(s) (CNPJs internos)")
+st.markdown("---")
 
 # ============================================
-# CONTEÚDO PRINCIPAL
+# CONTEÚDO PRINCIPAL - NAVEGAÇÃO POR ABAS
 # ============================================
 
-if tipo_analise == "Visão Geral":
+# Criar abas de navegação
+tab_visao_geral, tab_visao_estado, tab_analise_coletas, tab_listagem_pcls, tab_listagem_empresas, tab_analises_especificas, tab_ajuda = st.tabs([
+    "📈 Visão Geral",
+    "🗺️ Por Estado",
+    "📊 Coletas",
+    "🏥 PCLs",
+    "🏢 Empresas",
+    "🔍 Análises",
+    "❓ Ajuda"
+])
+
+with tab_visao_geral:
     create_section_header("📈", "Visão Geral", "Métricas e indicadores principais da base CTOX")
     
     # Calcular métricas
@@ -1198,7 +1220,7 @@ if tipo_analise == "Visão Geral":
             fig = create_grouped_bar_chart(df_empresas, 'uf', "Empresas: Ativas vs Inativas", max_items=10)
             st.plotly_chart(fig, width='stretch')
 
-elif tipo_analise == "Visão por Estado":
+with tab_visao_estado:
     create_section_header("🗺️", "Visão por Estado", "Painel consolidado com métricas por UF")
     
     # Seletor de estado específico
@@ -1383,7 +1405,7 @@ elif tipo_analise == "Visão por Estado":
     else:
         st.warning("Nenhum dado disponível para exibição.")
 
-elif tipo_analise == "Análise de Coletas":
+with tab_analise_coletas:
     create_section_header("🔬", "Análise de Coletas", "Métricas detalhadas de coletas por estado e PCL")
     
     if df_labs.empty or 'acumulado_coletas' not in df_labs.columns:
@@ -1535,20 +1557,34 @@ elif tipo_analise == "Análise de Coletas":
                     height=500
                 )
 
-elif tipo_analise == "Listagem de PCLs":
+with tab_listagem_pcls:
     create_section_header("🏥", "Listagem de PCLs", "Base completa de laboratórios credenciados")
-    
-    df_labs_filtered = apply_filters(df_labs, estado_selecionado, cidade_selecionada)
-    
+
+    # Filtros dentro da aba (usando listas cacheadas)
+    col_filtro1, col_filtro2, col_filtro3 = st.columns([1, 1, 2])
+
+    with col_filtro1:
+        estados_pcl_lista = ['Todos'] + listas_filtros['pcl']['estados']
+        estado_pcl_selecionado = st.selectbox("Estado", estados_pcl_lista, key="filtro_estado_pcl")
+
+    with col_filtro2:
+        if estado_pcl_selecionado != "Todos":
+            cidades_pcl_lista = ['Todas'] + listas_filtros['pcl']['cidades_por_estado'].get(estado_pcl_selecionado, [])
+        else:
+            cidades_pcl_lista = ['Todas'] + listas_filtros['pcl']['cidades']
+        cidade_pcl_selecionada = st.selectbox("Cidade", cidades_pcl_lista, key="filtro_cidade_pcl")
+
+    df_labs_filtered = apply_filters(df_labs, estado_pcl_selecionado, cidade_pcl_selecionada)
+
     if df_labs_filtered.empty:
         st.warning("Nenhum PCL encontrado com os filtros selecionados.")
     else:
         # Métricas rápidas
         col1, col2, col3, col4 = st.columns(4)
-        
+
         total = len(df_labs_filtered)
         ativos = len(df_labs_filtered[df_labs_filtered['status'] == 'Ativo']) if 'status' in df_labs_filtered.columns else 0
-        
+
         with col1:
             create_metric_card("Total Filtrado", format_number(total), "", "", "gray")
         with col2:
@@ -1558,45 +1594,18 @@ elif tipo_analise == "Listagem de PCLs":
         with col4:
             coletas = df_labs_filtered['acumulado_coletas'].sum() if 'acumulado_coletas' in df_labs_filtered.columns else 0
             create_metric_card("Total Coletas", format_number(int(coletas)), "", "", "gray")
-        
+
         st.markdown("---")
-        
-        # Enriquecer dados com campos calculados
+
+        # Usar dados pré-calculados (cacheados) em vez de recalcular
         df_display = df_labs_filtered.copy()
-        
-        # Criar Cidade+UF
-        if 'cidade' in df_display.columns and 'uf' in df_display.columns:
-            df_display['cidade_uf'] = df_display['cidade'].fillna('') + '-' + df_display['uf'].fillna('')
-        
-        # Calcular quantidade de empresas na cidade do PCL
-        if 'cidade' in df_display.columns and not df_empresas.empty and 'cidade' in df_empresas.columns:
-            empresas_por_cidade = df_empresas.groupby('cidade').size().to_dict()
+
+        # Adicionar contagens usando dicionários cacheados
+        if 'cidade' in df_display.columns:
             df_display['qtd_empresas_cidade'] = df_display['cidade'].map(empresas_por_cidade).fillna(0).astype(int)
-            
-            # Empresas ativas na cidade
-            empresas_ativas_cidade = df_empresas[df_empresas['status'] == 'Ativo'].groupby('cidade').size().to_dict() if 'status' in df_empresas.columns else {}
             df_display['qtd_empresas_ativas_cidade'] = df_display['cidade'].map(empresas_ativas_cidade).fillna(0).astype(int)
-            
-            # Empresas inativas na cidade
             df_display['qtd_empresas_inativas_cidade'] = df_display['qtd_empresas_cidade'] - df_display['qtd_empresas_ativas_cidade']
-            
-            # Empresas que utilizaram voucher (acumulado > 0)
-            if 'acumulado_vouchers' in df_empresas.columns:
-                empresas_com_voucher = df_empresas[df_empresas['acumulado_vouchers'].fillna(0) > 0].groupby('cidade').size().to_dict()
-                df_display['qtd_empresas_usaram_voucher'] = df_display['cidade'].map(empresas_com_voucher).fillna(0).astype(int)
-                
-                empresas_sem_voucher = df_empresas[df_empresas['acumulado_vouchers'].fillna(0) == 0].groupby('cidade').size().to_dict()
-                df_display['qtd_empresas_nunca_voucher'] = df_display['cidade'].map(empresas_sem_voucher).fillna(0).astype(int)
-                
-                # Empresas que nunca utilizaram - separado por representação (INTERNO/EXTERNO)
-                if 'representacao' in df_empresas.columns:
-                    empresas_nunca_interno = df_empresas[(df_empresas['acumulado_vouchers'].fillna(0) == 0) & 
-                                                          (df_empresas['representacao'].str.upper().str.contains('INTERNO', na=False))].groupby('cidade').size().to_dict()
-                    df_display['qtd_empresas_nunca_interno'] = df_display['cidade'].map(empresas_nunca_interno).fillna(0).astype(int)
-                    
-                    empresas_usaram_interno = df_empresas[(df_empresas['acumulado_vouchers'].fillna(0) > 0) & 
-                                                           (df_empresas['representacao'].str.upper().str.contains('INTERNO', na=False))].groupby('cidade').size().to_dict()
-                    df_display['qtd_empresas_usaram_interno'] = df_display['cidade'].map(empresas_usaram_interno).fillna(0).astype(int)
+            df_display['qtd_empresas_usaram_voucher'] = df_display['cidade'].map(empresas_com_voucher).fillna(0).astype(int)
         
         # Preparar DataFrame para exibição
         colunas_pcl = [
@@ -1636,21 +1645,34 @@ elif tipo_analise == "Listagem de PCLs":
             mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
 
-elif tipo_analise == "Listagem de Empresas":
+with tab_listagem_empresas:
     create_section_header("🏢", "Listagem de Empresas", "Base completa de empresas credenciadas")
-    
-    df_empresas_filtered = apply_filters(df_empresas, estado_selecionado, cidade_selecionada)
-    
+
+    # Filtros dentro da aba
+    col_filtro1, col_filtro2, col_filtro3 = st.columns([1, 1, 2])
+
+    with col_filtro1:
+        estados_emp_lista = ['Todos'] + listas_filtros['empresa']['estados']
+        estado_emp_selecionado = st.selectbox("Estado", estados_emp_lista, key="filtro_estado_emp")
+
+    with col_filtro2:
+        if estado_emp_selecionado != "Todos":
+            cidades_emp_lista = ['Todas'] + listas_filtros['empresa']['cidades_por_estado'].get(estado_emp_selecionado, [])
+        else:
+            cidades_emp_lista = ['Todas'] + listas_filtros['empresa']['cidades']
+        cidade_emp_selecionada = st.selectbox("Cidade", cidades_emp_lista, key="filtro_cidade_emp")
+
+    df_empresas_filtered = apply_filters(df_empresas, estado_emp_selecionado, cidade_emp_selecionada)
+
     if df_empresas_filtered.empty:
         st.warning("Nenhuma empresa encontrada com os filtros selecionados.")
     else:
         # Métricas rápidas
         col1, col2, col3, col4 = st.columns(4)
-        
+
         total = len(df_empresas_filtered)
         ativas = len(df_empresas_filtered[df_empresas_filtered['status'] == 'Ativo']) if 'status' in df_empresas_filtered.columns else 0
-        
-        
+
         with col1:
             create_metric_card("Total Filtrado", format_number(total), "", "", "gray")
         with col2:
@@ -1663,44 +1685,18 @@ elif tipo_analise == "Listagem de Empresas":
             else:
                 vouchers = 0
             create_metric_card("Total Vouchers", format_number(int(vouchers)), "", "", "gray")
-        
+
         st.markdown("---")
-        
-        # Enriquecer dados com campos calculados
+
+        # Usar dados pré-calculados (cacheados) em vez de recalcular
         df_display = df_empresas_filtered.copy()
-        
-        
-        # Criar Cidade+UF
-        if 'cidade' in df_display.columns and 'uf' in df_display.columns:
-            df_display['cidade_uf'] = df_display['cidade'].fillna('') + '-' + df_display['uf'].fillna('')
-        
-        # Calcular quantidade de PCLs na cidade da empresa
-        if 'cidade' in df_display.columns and not df_labs.empty and 'cidade' in df_labs.columns:
-            pcls_por_cidade = df_labs.groupby('cidade').size().to_dict()
+
+        # Adicionar contagens usando dicionários cacheados
+        if 'cidade' in df_display.columns:
             df_display['qtd_pcls_cidade'] = df_display['cidade'].map(pcls_por_cidade).fillna(0).astype(int)
-            
-            # PCL na cidade? (Sim/Não)
             df_display['pcl_na_cidade'] = df_display['qtd_pcls_cidade'].apply(lambda x: 'Sim' if x > 0 else 'Não')
-            
-            # PCLs ativos na cidade
-            if 'status' in df_labs.columns:
-                pcls_ativos_cidade = df_labs[df_labs['status'] == 'Ativo'].groupby('cidade').size().to_dict()
-                df_display['qtd_pcls_ativos_cidade'] = df_display['cidade'].map(pcls_ativos_cidade).fillna(0).astype(int)
-                
-                # PCLs inativos na cidade
-                df_display['qtd_pcls_inativos_cidade'] = df_display['qtd_pcls_cidade'] - df_display['qtd_pcls_ativos_cidade']
-                
-                # PCLs ativos/inativos por representação (INTERNO/EXTERNO)
-                if 'representacao' in df_labs.columns:
-                    # PCLs ativos INTERNO
-                    pcls_ativos_interno = df_labs[(df_labs['status'] == 'Ativo') & 
-                                                   (df_labs['representacao'].str.upper().str.contains('INTERNO', na=False))].groupby('cidade').size().to_dict()
-                    df_display['qtd_pcls_ativos_interno'] = df_display['cidade'].map(pcls_ativos_interno).fillna(0).astype(int)
-                    
-                    # PCLs inativos INTERNO
-                    pcls_inativos_interno = df_labs[(df_labs['status'] == 'Inativo') & 
-                                                     (df_labs['representacao'].str.upper().str.contains('INTERNO', na=False))].groupby('cidade').size().to_dict()
-                    df_display['qtd_pcls_inativos_interno'] = df_display['cidade'].map(pcls_inativos_interno).fillna(0).astype(int)
+            df_display['qtd_pcls_ativos_cidade'] = df_display['cidade'].map(pcls_ativos_cidade).fillna(0).astype(int)
+            df_display['qtd_pcls_inativos_cidade'] = df_display['qtd_pcls_cidade'] - df_display['qtd_pcls_ativos_cidade']
         
         # Garantir que colunas existam para exibição
         if 'acumulado_vouchers' not in df_display.columns:
@@ -1755,7 +1751,7 @@ elif tipo_analise == "Listagem de Empresas":
             mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
 
-elif tipo_analise == "Análises Específicas":
+with tab_analises_especificas:
     create_section_header("🔍", "Análises Específicas", "Consultas customizadas conforme demanda")
     
     analise_tipo = st.selectbox(
@@ -2031,41 +2027,36 @@ elif tipo_analise == "Análises Específicas":
             cobertura = cobertura.sort_values('Cidades Atendidas')
             st.dataframe(cobertura, width='stretch', hide_index=True)
 
-elif tipo_analise == "Ajuda / FAQ":
+with tab_ajuda:
     create_section_header("❓", "Ajuda / FAQ", "Perguntas frequentes e orientações de uso")
 
-    # Tabs para organizar o conteúdo
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Navegação", "Entendendo os Dados", "Colunas e Métricas", "Análises", "Problemas Comuns"])
+    # Sub-tabs para organizar o conteúdo de ajuda
+    subtab1, subtab2, subtab3, subtab4, subtab5, subtab6 = st.tabs(["Navegação", "Entendendo os Dados", "Colunas e Métricas", "Análises", "Problemas Comuns", "Fontes de Dados"])
 
-    with tab1:
+    with subtab1:
         st.markdown("### Como navegar no dashboard?")
         st.markdown("""
-        Use o menu **NAVEGAÇÃO** na barra lateral esquerda para acessar as diferentes seções:
+        Use as **abas na parte superior** da página para acessar as diferentes seções:
 
-        | Seção | Descrição |
-        |-------|-----------|
-        | **Visão Geral** | Métricas gerais e gráficos comparativos por estado |
-        | **Visão por Estado** | Análise detalhada por UF |
-        | **Análise de Coletas** | Estatísticas de coletas realizadas |
-        | **Listagem de PCLs** | Tabela completa de laboratórios/pontos de coleta |
-        | **Listagem de Empresas** | Tabela completa de empresas credenciadas |
-        | **Análises Específicas** | Consultas customizadas para cenários específicos |
+        | Aba | Descrição |
+        |-----|-----------|
+        | **📈 Visão Geral** | Métricas gerais e gráficos comparativos por estado |
+        | **🗺️ Por Estado** | Análise detalhada por UF |
+        | **📊 Coletas** | Estatísticas de coletas realizadas |
+        | **🏥 PCLs** | Tabela completa de laboratórios/pontos de coleta |
+        | **🏢 Empresas** | Tabela completa de empresas credenciadas |
+        | **🔍 Análises** | Consultas customizadas para cenários específicos |
+        | **❓ Ajuda** | Esta seção de ajuda |
         """)
 
         st.markdown("### Como filtrar os dados?")
         st.markdown("""
-        Use os filtros **ESTADO** e **CIDADE** na barra lateral para refinar os dados exibidos.
+        Os filtros **ESTADO** e **CIDADE** estão disponíveis diretamente nas abas de **PCLs** e **Empresas**.
         - Selecione "Todos" para ver todos os registros
-        - Os filtros afetam todas as seções e também os downloads em Excel
+        - Os filtros afetam os dados exibidos e também os downloads em Excel
         """)
 
-        st.markdown("### O que significam os ícones na sidebar?")
-        st.markdown("""
-        - ☁️ = Dados carregados do SharePoint (nuvem)
-        - 💻 = Dados carregados de arquivos locais
-        """)
-
-    with tab2:
+    with subtab2:
         st.markdown("### O que é um PCL?")
         st.markdown("""
         **PCL** (Ponto de Coleta/Laboratório) é um estabelecimento credenciado para realizar coletas de exames toxicológicos.
@@ -2096,7 +2087,7 @@ elif tipo_analise == "Ajuda / FAQ":
         A data da última atualização aparece no rodapé do dashboard.
         """)
 
-    with tab3:
+    with subtab3:
         st.markdown("### Colunas da Listagem de PCLs")
         st.markdown("""
         | Coluna | Descrição |
@@ -2130,7 +2121,7 @@ elif tipo_analise == "Ajuda / FAQ":
         | **ALTERNADO** | Coleta em dias alternados |
         """)
 
-    with tab4:
+    with subtab4:
         st.markdown("### Análises Específicas Disponíveis")
 
         with st.expander("1. PCLs em cidades SEM Empresas credenciadas"):
@@ -2175,7 +2166,7 @@ elif tipo_analise == "Ajuda / FAQ":
             **Utilidade:** Identificar oportunidades de expansão territorial.
             """)
 
-    with tab5:
+    with subtab5:
         st.markdown("### Problemas Comuns e Soluções")
 
         with st.expander("O dashboard está lento"):
@@ -2224,6 +2215,69 @@ elif tipo_analise == "Ajuda / FAQ":
         | **Credenciamento** | Cadastro e autorização no sistema |
         | **Status Ativo** | Entidade com atividade recente |
         | **Status Inativo** | Entidade sem atividade por período prolongado |
+        """)
+
+    with subtab6:
+        st.markdown("### Fontes de Dados")
+        st.markdown("""
+        O dashboard carrega dados de diferentes fontes para compor as análises.
+        """)
+
+        st.markdown("#### Dados de PCLs e Empresas")
+
+        # Mostrar arquivos carregados
+        col_pcl, col_emp = st.columns(2)
+
+        with col_pcl:
+            st.markdown("**PCLs (Laboratórios)**")
+            if file_info.get('labs_file'):
+                icon = "☁️" if file_info.get('labs_source') == 'sharepoint' else "💻"
+                st.success(f"{icon} {file_info['labs_file']}")
+            else:
+                st.warning("Nenhum arquivo carregado")
+
+        with col_emp:
+            st.markdown("**Empresas**")
+            if file_info.get('empresas_file'):
+                icon = "☁️" if file_info.get('empresas_source') == 'sharepoint' else "💻"
+                st.success(f"{icon} {file_info['empresas_file']}")
+            else:
+                st.warning("Nenhum arquivo carregado")
+
+        st.markdown("#### Matriz Logística (Transportadora/Frequência)")
+        # Exibir status do carregamento da matriz logística
+        if matriz_status.get('loaded'):
+            # Buscar nome do arquivo das configurações
+            sp_logistica = st.secrets.get("sharepoint_logistica", {})
+            matriz_file_path = sp_logistica.get("file_path", "")
+            matriz_file_name = matriz_file_path.split("/")[-1] if matriz_file_path else "CONSULTA MATRIZ LOGISTICA.1.xlsx"
+            st.success(f"☁️ {matriz_file_name}")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown(f"**Registros:** {matriz_status.get('records', 0):,}")
+            with col2:
+                loaded_at = matriz_status.get('loaded_at')
+                if loaded_at:
+                    st.markdown(f"**Carregada em:** {loaded_at.strftime('%d/%m/%Y %H:%M')}")
+        else:
+            st.error("Não foi possível carregar a matriz logística")
+            if matriz_status.get('error'):
+                st.markdown(f"**Erro:** {matriz_status.get('error')}")
+            st.markdown("""
+            **Possíveis causas:**
+            - Arquivo não encontrado no SharePoint
+            - Problemas de conexão
+            - Credenciais inválidas ou expiradas
+            """)
+
+        st.caption("☁️ = SharePoint/OneDrive | 💻 = Arquivo local")
+
+        st.markdown("---")
+        st.markdown("#### Atualização dos dados")
+        st.markdown("""
+        Os dados são atualizados periodicamente. Para forçar uma nova leitura:
+        1. Pressione **F5** para recarregar a página
+        2. O cache é automaticamente invalidado após 1 hora
         """)
 
 # ============================================

@@ -11,6 +11,7 @@ ENV/
 secrets.toml
 .env
 .env.*
+test_credentials.py
 # Streamlit
 .streamlit/
 

@@ -79,6 +79,25 @@ def format_percentage(value, total):
     except:
         return "-"
 
+def format_cnpj(cnpj):
+    """Formata CNPJ com zeros à esquerda e pontuação: XX.XXX.XXX/XXXX-XX"""
+    if pd.isna(cnpj) or cnpj is None or str(cnpj).strip() == '':
+        return ""
+    try:
+        # Remover qualquer formatação existente (pontos, barras, hífens)
+        cnpj_limpo = str(cnpj).replace('.', '').replace('/', '').replace('-', '').replace(' ', '')
+        # Remover possível .0 de números float
+        if cnpj_limpo.endswith('.0'):
+            cnpj_limpo = cnpj_limpo[:-2]
+        # Converter para inteiro e depois para string com zeros à esquerda
+        cnpj_numeros = ''.join(filter(str.isdigit, cnpj_limpo))
+        # Garantir 14 dígitos com zeros à esquerda
+        cnpj_padded = cnpj_numeros.zfill(14)
+        # Formatar: XX.XXX.XXX/XXXX-XX
+        return f"{cnpj_padded[:2]}.{cnpj_padded[2:5]}.{cnpj_padded[5:8]}/{cnpj_padded[8:12]}-{cnpj_padded[12:14]}"
+    except:
+        return str(cnpj)
+
 # ============================================
 # COMPONENTES DE UI
 # ============================================
@@ -814,9 +833,13 @@ def process_empresas(df_empresas):
     """
     if df_empresas.empty:
         return df_empresas
-    
+
     df = normalize_column_names(df_empresas)
-    
+
+    # Formatar CNPJ com zeros à esquerda e pontuação
+    if 'cnpj' in df.columns:
+        df['cnpj'] = df['cnpj'].apply(format_cnpj)
+
     # Garantir que colunas numéricas existam e sejam numéricas
     if 'acumulado_vouchers' in df.columns:
         df['acumulado_vouchers'] = pd.to_numeric(df['acumulado_vouchers'], errors='coerce').fillna(0)
@@ -880,9 +903,13 @@ def process_labs(df_labs):
     """
     if df_labs.empty:
         return df_labs
-    
+
     df = normalize_column_names(df_labs)
-    
+
+    # Formatar CNPJ com zeros à esquerda e pontuação
+    if 'cnpj' in df.columns:
+        df['cnpj'] = df['cnpj'].apply(format_cnpj)
+
     # Garantir que acumulado_coletas seja numérico
     if 'acumulado_coletas' in df.columns:
         df['acumulado_coletas'] = pd.to_numeric(df['acumulado_coletas'], errors='coerce').fillna(0)

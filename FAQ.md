@@ -70,7 +70,11 @@ Use o menu lateral (sidebar) à esquerda para selecionar a seção desejada no c
 Vouchers são créditos que empresas utilizam para pagar coletas de exames toxicológicos de seus funcionários.
 
 ### Os dados são atualizados em tempo real?
-Não. Os dados são atualizados periodicamente (geralmente no último dia de cada mês). A data da última atualização aparece no rodapé do dashboard.
+Não. Os dados são atualizados de acordo com a disponibilidade nas planilhas no SharePoint corporativo. As planilhas estão localizadas no SharePoint na pasta **"Data Analysis"**, dentro das subpastas:
+- **"Acumulado de Coletas - Empresas"** (para dados de empresas)
+- **"Acumulado de Coletas - Labs"** (para dados de PCLs)
+
+O sistema carrega automaticamente o arquivo mais recente de cada pasta sempre que a página é recarregada.
 
 ---
 

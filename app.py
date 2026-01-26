@@ -2090,8 +2090,12 @@ with tab_ajuda:
 
         st.markdown("### Os dados são atualizados em tempo real?")
         st.markdown("""
-        Não. Os dados são atualizados periodicamente (geralmente no último dia de cada mês).
-        A data da última atualização aparece no rodapé do dashboard.
+        Não. Os dados são atualizados de acordo com a disponibilidade nas planilhas no SharePoint corporativo. 
+        As planilhas estão localizadas no **SharePoint corporativo** na pasta **"Data Analysis"**, dentro das subpastas:
+        - **"Acumulado de Coletas - Empresas"** (para dados de empresas)
+        - **"Acumulado de Coletas - Labs"** (para dados de PCLs)
+        
+        O sistema carrega automaticamente o arquivo mais recente de cada pasta sempre que a página é recarregada.
         """)
 
     with subtab3:
@@ -2282,7 +2286,12 @@ with tab_ajuda:
         st.markdown("---")
         st.markdown("#### Atualização dos dados")
         st.markdown("""
-        Os dados são atualizados periodicamente. Para forçar uma nova leitura:
+        Os dados são atualizados de acordo com a disponibilidade nas planilhas no SharePoint corporativo. 
+        As planilhas estão localizadas no **SharePoint corporativo** na pasta **"Data Analysis"**, dentro das subpastas:
+        - **"Acumulado de Coletas - Empresas"** (para dados de empresas)
+        - **"Acumulado de Coletas - Labs"** (para dados de PCLs)
+        
+        Para forçar uma nova leitura:
         1. Pressione **F5** para recarregar a página
         2. O cache é automaticamente invalidado após 1 hora
         """)

@@ -141,11 +141,22 @@ def create_section_header(icon, title, subtitle=""):
 # FUNÇÕES DE GRÁFICOS
 # ============================================
 
-def create_bar_chart(df, x_col, y_col, title, max_items=12, color='#22C55E'):
-    """Cria gráfico de barras horizontal moderno"""
+def create_bar_chart(df, x_col, y_col, title, max_items=12, color='#22C55E', sort_by_alpha=False):
+    """Cria gráfico de barras horizontal moderno
+    
+    Args:
+        sort_by_alpha: Se True, ordena alfabeticamente por x_col. Se False, ordena por y_col (quantidade)
+    """
     df_chart = df.copy()
-    df_chart = df_chart.sort_values(y_col, ascending=False).head(max_items)
-    df_chart = df_chart.sort_values(y_col, ascending=True)
+    if sort_by_alpha:
+        # Ordenar alfabeticamente por x_col (nome da cidade/estado)
+        df_chart = df_chart.sort_values(x_col, ascending=True)
+        if max_items > 0:
+            df_chart = df_chart.head(max_items)
+    else:
+        # Ordenar por quantidade (comportamento padrão)
+        df_chart = df_chart.sort_values(y_col, ascending=False).head(max_items)
+        df_chart = df_chart.sort_values(y_col, ascending=True)
 
     # Limpar valores NaN/None
     df_chart[y_col] = df_chart[y_col].fillna(0)
@@ -891,13 +902,17 @@ def process_labs(df_labs):
     """
     Processa dados de labs (PCLs).
     
-    CRITÉRIO DE ATIVIDADE:
+    FILTRO INICIAL:
+    - PCLs com "Ativo em Coletas" = False são EXCLUÍDOS completamente (não são considerados)
+    
+    CRITÉRIO DE ATIVIDADE (para PCLs restantes):
     Um PCL é considerado ATIVO se:
+    - "Ativo em Coletas" = True (todos os restantes após filtro) OU
     - Dias sem coleta <= 90 OU
     - Acumulado de Coletas > 0
     
     Usa as colunas do Excel:
-    - 'Ativo em Coletas' (booleano)
+    - 'Ativo em Coletas' (booleano) - PCLs com False são excluídos
     - 'Dias sem coleta' (número)
     - 'Acumulado de Coletas' (número)
     """
@@ -905,6 +920,18 @@ def process_labs(df_labs):
         return df_labs
 
     df = normalize_column_names(df_labs)
+
+    # EXCLUIR PCLs com "Ativo em Coletas" = False (não devem ser considerados)
+    if 'ativo em coletas' in df.columns:
+        total_antes = len(df)
+        # Filtrar apenas PCLs onde "Ativo em Coletas" é True
+        # Considerar True: True, 'true', 'True', 1, '1', 'sim', 'Sim', 'yes', 'Yes'
+        df = df[df['ativo em coletas'].apply(
+            lambda x: x == True or str(x).lower() in ['true', '1', 'sim', 'yes', 's', 'y']
+        )]
+        pcls_excluidos_ativos = total_antes - len(df)
+        if pcls_excluidos_ativos > 0:
+            print(f"Excluídos {pcls_excluidos_ativos} PCLs com 'Ativo em Coletas' = False")
 
     # Formatar CNPJ com zeros à esquerda e pontuação
     if 'cnpj' in df.columns:
@@ -917,8 +944,9 @@ def process_labs(df_labs):
         df['acumulado_coletas'] = 0
     
     # Usar coluna 'Ativo em Coletas' se existir (já vem do Excel)
+    # Agora todos os PCLs restantes devem ser considerados Ativos (já filtramos os False)
     if 'ativo em coletas' in df.columns:
-        df['status'] = df['ativo em coletas'].apply(lambda x: 'Ativo' if x == True or str(x).lower() == 'true' else 'Inativo')
+        df['status'] = 'Ativo'  # Todos os PCLs restantes são ativos (já filtramos os False)
     elif 'dias sem coleta' in df.columns:
         # Usar dias sem coleta
         dias = pd.to_numeric(df['dias sem coleta'], errors='coerce').fillna(9999)
@@ -1078,8 +1106,8 @@ st.markdown("---")
 # CONTEÚDO PRINCIPAL - NAVEGAÇÃO POR ABAS
 # ============================================
 
-# Criar abas de navegação
-tab_visao_geral, tab_visao_estado, tab_analise_coletas, tab_listagem_pcls, tab_listagem_empresas, tab_analises_especificas, tab_ajuda = st.tabs([
+# Seletor de aba (com key para persistir ao mudar widgets dentro da aba, ex: selectbox de estado)
+TAB_LABELS = [
     "📈 Visão Geral",
     "🗺️ Por Estado",
     "📊 Coletas",
@@ -1087,9 +1115,17 @@ tab_visao_geral, tab_visao_estado, tab_analise_coletas, tab_listagem_pcls, tab_l
     "🏢 Empresas",
     "🔍 Análises",
     "❓ Ajuda"
-])
+]
+main_nav_tab = st.radio(
+    "Navegação",
+    options=TAB_LABELS,
+    key="main_nav_tab",
+    horizontal=True,
+    label_visibility="collapsed"
+)
+st.markdown("---")
 
-with tab_visao_geral:
+if main_nav_tab == "📈 Visão Geral":
     create_section_header("📈", "Visão Geral", "Métricas e indicadores principais da base CTOX")
     
     # Calcular métricas
@@ -1147,8 +1183,8 @@ with tab_visao_geral:
         cidades_pcl = df_labs['cidade'].nunique() if not df_labs.empty and 'cidade' in df_labs.columns else 0
         create_metric_card("Cobertura", f"{estados_pcl} UFs", f"{format_number(cidades_pcl)} cidades", "", "gray")
     with col4:
-        razao = total_pcls / total_empresas if total_empresas > 0 else 0
-        create_metric_card("Razão PCL/Empresa", f"{razao:.3f}", "PCLs por empresa", "", "gray")
+        media_coletas_por_pcl = total_coletas / total_pcls if total_pcls > 0 else 0
+        create_metric_card("Média de Coletas", format_number(int(media_coletas_por_pcl)), "Coletas por PCL", "", "gray")
     
     st.markdown("---")
     
@@ -1229,7 +1265,7 @@ with tab_visao_geral:
             fig = create_grouped_bar_chart(df_empresas, 'uf', "Empresas: Ativas vs Inativas", max_items=10)
             st.plotly_chart(fig, use_container_width=True)
 
-with tab_visao_estado:
+elif main_nav_tab == "🗺️ Por Estado":
     create_section_header("🗺️", "Visão por Estado", "Painel consolidado com métricas por UF")
     
     # Seletor de estado específico
@@ -1320,7 +1356,8 @@ with tab_visao_estado:
         with col1:
             if not df_labs_uf.empty and 'cidade' in df_labs_uf.columns:
                 df_cidade_pcl = df_labs_uf.groupby('cidade').size().reset_index(name='Quantidade')
-                fig = create_bar_chart(df_cidade_pcl, 'cidade', 'Quantidade', f"PCLs por Cidade - {estado_filtro}", max_items=10, color='#22C55E')
+                # Ordenar alfabeticamente por cidade
+                fig = create_bar_chart(df_cidade_pcl, 'cidade', 'Quantidade', f"PCLs por Cidade - {estado_filtro}", max_items=0, color='#22C55E', sort_by_alpha=True)
                 st.plotly_chart(fig, use_container_width=True)
             else:
                 st.info("Sem dados de PCLs para este estado.")
@@ -1328,7 +1365,8 @@ with tab_visao_estado:
         with col2:
             if not df_empresas_uf.empty and 'cidade' in df_empresas_uf.columns:
                 df_cidade_emp = df_empresas_uf.groupby('cidade').size().reset_index(name='Quantidade')
-                fig = create_bar_chart(df_cidade_emp, 'cidade', 'Quantidade', f"Empresas por Cidade - {estado_filtro}", max_items=10, color='#3B82F6')
+                # Ordenar alfabeticamente por cidade
+                fig = create_bar_chart(df_cidade_emp, 'cidade', 'Quantidade', f"Empresas por Cidade - {estado_filtro}", max_items=0, color='#3B82F6', sort_by_alpha=True)
                 st.plotly_chart(fig, use_container_width=True)
             else:
                 st.info("Sem dados de empresas para este estado.")
@@ -1396,7 +1434,8 @@ with tab_visao_estado:
             if col != 'UF':
                 tabela_resumo[col] = pd.to_numeric(tabela_resumo[col], errors='coerce').fillna(0).astype(int)
         
-        tabela_resumo = tabela_resumo.sort_values('PCLs', ascending=False)
+        # Ordenar alfabeticamente por UF
+        tabela_resumo = tabela_resumo.sort_values('UF', ascending=True)
         
         st.dataframe(tabela_resumo, use_container_width=True, hide_index=True, height=500)
         
@@ -1414,7 +1453,7 @@ with tab_visao_estado:
     else:
         st.warning("Nenhum dado disponível para exibição.")
 
-with tab_analise_coletas:
+elif main_nav_tab == "📊 Coletas":
     create_section_header("🔬", "Análise de Coletas", "Métricas detalhadas de coletas por estado e PCL")
     
     if df_labs.empty or 'acumulado_coletas' not in df_labs.columns:
@@ -1564,7 +1603,7 @@ with tab_analise_coletas:
                     height=500
                 )
 
-with tab_listagem_pcls:
+elif main_nav_tab == "🏥 PCLs":
     create_section_header("🏥", "Listagem de PCLs", "Base completa de laboratórios credenciados")
 
     # Filtros dentro da aba (usando listas cacheadas)
@@ -1652,7 +1691,7 @@ with tab_listagem_pcls:
             mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
 
-with tab_listagem_empresas:
+elif main_nav_tab == "🏢 Empresas":
     create_section_header("🏢", "Listagem de Empresas", "Base completa de empresas credenciadas")
 
     # Filtros dentro da aba
@@ -1758,7 +1797,7 @@ with tab_listagem_empresas:
             mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
 
-with tab_analises_especificas:
+elif main_nav_tab == "🔍 Análises":
     create_section_header("🔍", "Análises Específicas", "Consultas customizadas conforme demanda")
     
     analise_tipo = st.selectbox(
@@ -2034,7 +2073,7 @@ with tab_analises_especificas:
             cobertura = cobertura.sort_values('Cidades Atendidas')
             st.dataframe(cobertura, use_container_width=True, hide_index=True)
 
-with tab_ajuda:
+else:  # ❓ Ajuda
     create_section_header("❓", "Ajuda / FAQ", "Perguntas frequentes e orientações de uso")
 
     # Sub-tabs para organizar o conteúdo de ajuda
@@ -2070,11 +2109,27 @@ with tab_ajuda:
         """)
 
         st.markdown("### Qual a diferença entre PCL Ativo e Inativo?")
+        st.warning("""
+        ⚠️ **IMPORTANTE:** PCLs **descredenciados** são excluídos completamente do sistema e não aparecem em nenhuma análise.
+        
+        **O que são PCLs descredenciados?**
+        - São PCLs que tiveram seu credenciamento revogado ou cancelado
+        - Na planilha Excel, esses PCLs aparecem com o campo técnico **"Ativo em Coletas" = False**
+        - Este é um **dado técnico** da planilha que identifica PCLs que não devem mais ser considerados no sistema
+        - Esses PCLs são automaticamente filtrados e não entram em nenhuma contagem, análise ou listagem
+        """)
         col1, col2 = st.columns(2)
         with col1:
             st.success("**ATIVO**: Realizou coleta nos últimos **90 dias**")
         with col2:
             st.error("**INATIVO**: Sem coletas há mais de **90 dias**")
+        
+        st.markdown("""
+        **Critérios de classificação:**
+        - **PCLs descredenciados** (campo técnico "Ativo em Coletas" = False) são **excluídos** antes de qualquer análise
+        - Para os PCLs restantes, se a coluna "Ativo em Coletas" existir no Excel, apenas PCLs com valor **True** são considerados
+        - Se a coluna "Ativo em Coletas" não existir, usa-se "Dias sem coleta": ≤ 90 dias = Ativo, > 90 dias = Inativo
+        """)
 
         st.markdown("### Qual a diferença entre Empresa Ativa e Inativa?")
         col1, col2 = st.columns(2)
@@ -2099,6 +2154,22 @@ with tab_ajuda:
         """)
 
     with subtab3:
+        st.markdown("### Métricas da Visão Geral")
+        st.markdown("""
+        A aba **Visão Geral** exibe as seguintes métricas principais:
+        
+        | Métrica | Descrição |
+        |---------|-----------|
+        | **Total PCLs** | Quantidade total de PCLs no sistema (excluindo PCLs descredenciados - campo técnico "Ativo em Coletas" = False) |
+        | **PCLs Inativos** | PCLs sem coleta há mais de 90 dias |
+        | **Total Empresas** | Quantidade total de empresas credenciadas |
+        | **Empresas Inativas** | Empresas sem uso de voucher há mais de 365 dias |
+        | **Total Coletas** | Soma de todas as coletas realizadas (histórico) |
+        | **Total Vouchers** | Soma de todos os vouchers utilizados (histórico) |
+        | **Média de Coletas** | Média de coletas por PCL (Total Coletas ÷ Total PCLs) |
+        | **Cobertura** | Quantidade de estados e cidades atendidas |
+        """)
+        
         st.markdown("### Colunas da Listagem de PCLs")
         st.markdown("""
         | Coluna | Descrição |
@@ -2207,6 +2278,28 @@ with tab_ajuda:
             - O arquivo `CONSULTA MATRIZ LOGISTICA.1.xlsx` não está presente
             - A cidade do PCL não está cadastrada na matriz logística
             - O nome da cidade pode estar escrito de forma diferente
+            """)
+        
+        with st.expander("Alguns PCLs não aparecem no sistema"):
+            st.markdown("""
+            **Causa:** PCLs **descredenciados** são excluídos completamente do sistema.
+            
+            **O que são PCLs descredenciados?**
+            - São PCLs que tiveram seu credenciamento revogado ou cancelado
+            - Na planilha Excel, esses PCLs são identificados pelo campo técnico **"Ativo em Coletas" = False**
+            - Este é um **dado técnico** da planilha que sinaliza que o PCL não deve mais ser considerado
+            
+            **Como funciona:**
+            - Se o arquivo Excel contém a coluna "Ativo em Coletas", o sistema verifica este campo técnico
+            - Apenas PCLs com valor **True** são processados e aparecem nas análises
+            - PCLs com valor **False** (descredenciados) são **automaticamente excluídos** antes de qualquer processamento
+            - Esses PCLs não aparecem em nenhuma análise, listagem, métrica ou download
+            
+            **Por que isso acontece?**
+            - É uma regra de negócio: PCLs descredenciados não devem ser considerados em análises operacionais
+            - O campo "Ativo em Coletas" = False é o indicador técnico usado para identificar esses PCLs na planilha
+            
+            **Solução:** Se um PCL descredenciado precisa aparecer novamente, é necessário atualizar o campo "Ativo em Coletas" para **True** na planilha fonte no SharePoint.
             """)
 
         with st.expander("Uma cidade não aparece nos resultados"):

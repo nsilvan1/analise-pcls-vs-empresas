@@ -1115,11 +1115,18 @@ def _visao_estado_fragment():
         estados_lista = sorted(df_labs['uf'].dropna().unique().tolist())
     elif not df_empresas.empty and 'uf' in df_empresas.columns:
         estados_lista = sorted(df_empresas['uf'].dropna().unique().tolist())
-    estado_filtro = st.selectbox(
-        "Selecione o Estado",
-        ["Todos"] + estados_lista,
-        key="estado_visao_uf"
-    )
+    col_filtro, col_btn = st.columns([3, 1])
+    with col_filtro:
+        estado_filtro = st.selectbox(
+            "Selecione o Estado",
+            ["Todos"] + estados_lista,
+            key="estado_visao_uf"
+        )
+    with col_btn:
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("Limpar Filtros", key="limpar_visao_estado"):
+            st.session_state["estado_visao_uf"] = "Todos"
+            st.rerun()
     st.markdown("---")
     if estado_filtro == "Todos":
         df_labs_uf = df_labs.copy()
@@ -1611,6 +1618,13 @@ with tab_listagem_pcls:
             cidades_pcl_lista = ['Todas'] + listas_filtros['pcl']['cidades']
         cidade_pcl_selecionada = st.selectbox("Cidade", cidades_pcl_lista, key="filtro_cidade_pcl")
 
+    with col_filtro3:
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("Limpar Filtros", key="limpar_pcls"):
+            st.session_state["filtro_estado_pcl"] = "Todos"
+            st.session_state["filtro_cidade_pcl"] = "Todas"
+            st.rerun()
+
     df_labs_filtered = apply_filters(df_labs, estado_pcl_selecionado, cidade_pcl_selecionada)
 
     if df_labs_filtered.empty:
@@ -1698,6 +1712,13 @@ with tab_listagem_empresas:
         else:
             cidades_emp_lista = ['Todas'] + listas_filtros['empresa']['cidades']
         cidade_emp_selecionada = st.selectbox("Cidade", cidades_emp_lista, key="filtro_cidade_emp")
+
+    with col_filtro3:
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("Limpar Filtros", key="limpar_empresas"):
+            st.session_state["filtro_estado_emp"] = "Todos"
+            st.session_state["filtro_cidade_emp"] = "Todas"
+            st.rerun()
 
     df_empresas_filtered = apply_filters(df_empresas, estado_emp_selecionado, cidade_emp_selecionada)
 

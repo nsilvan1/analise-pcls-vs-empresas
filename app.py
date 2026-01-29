@@ -927,10 +927,36 @@ def normalize_column_names(df):
     
     return df
 
+def padronizar_nome(nome):
+    """
+    ADD-960: Padroniza nome de cidade/bairro para exibição consistente.
+    Converte para Title Case, tratando preposições em português.
+    """
+    if pd.isna(nome) or nome is None or str(nome).strip() == '':
+        return ''
+
+    nome_str = str(nome).strip()
+    # Remover espaços múltiplos
+    nome_str = ' '.join(nome_str.split())
+
+    # Converter para Title Case
+    palavras = nome_str.lower().split()
+    preposicoes = {'de', 'da', 'do', 'das', 'dos', 'e'}
+
+    resultado = []
+    for i, palavra in enumerate(palavras):
+        # Primeira palavra sempre capitalizada, preposições em minúsculo (exceto no início)
+        if i == 0 or palavra not in preposicoes:
+            resultado.append(palavra.capitalize())
+        else:
+            resultado.append(palavra)
+
+    return ' '.join(resultado)
+
 def process_empresas(df_empresas):
     """
     Processa dados de empresas.
-    
+
     CRITÉRIO DE ATIVIDADE:
     Uma empresa é considerada ATIVA se:
     - Última Coleta (Voucher) <= 365 dias OU
@@ -1005,7 +1031,13 @@ def process_empresas(df_empresas):
         df['ultima_coleta'] = df['ultima_coleta_nao_voucher']
     elif 'ultima_coleta_voucher' in df.columns:
         df['ultima_coleta'] = df['ultima_coleta_voucher']
-    
+
+    # ADD-960: Padronizar nomes de cidade e bairro
+    if 'cidade' in df.columns:
+        df['cidade'] = df['cidade'].apply(padronizar_nome)
+    if 'bairro' in df.columns:
+        df['bairro'] = df['bairro'].apply(padronizar_nome)
+
     return df
 
 def process_labs(df_labs):
@@ -1079,7 +1111,13 @@ def process_labs(df_labs):
         df['acumulado_coletas_ano'] = pd.to_numeric(df['coletas_2025'], errors='coerce').fillna(0)
     elif 'acumulado_coletas' in df.columns:
         df['acumulado_coletas_ano'] = df['acumulado_coletas']
-    
+
+    # ADD-960: Padronizar nomes de cidade e bairro
+    if 'cidade' in df.columns:
+        df['cidade'] = df['cidade'].apply(padronizar_nome)
+    if 'bairro' in df.columns:
+        df['bairro'] = df['bairro'].apply(padronizar_nome)
+
     return df
 
 def normalize_city_name(city):
@@ -1722,12 +1760,20 @@ def _listagem_pcls_fragment():
             df_display['qtd_empresas_inativas_cidade'] = df_display['qtd_empresas_cidade'] - df_display['qtd_empresas_ativas_cidade']
             df_display['qtd_empresas_usaram_voucher'] = df_display['cidade'].map(empresas_com_voucher).fillna(0).astype(int)
 
+        # ADD-959: Adicionar dias desde última coleta para validação de status
+        if 'data_ultima_coleta' in df_display.columns:
+            hoje = pd.Timestamp.now().normalize()
+            df_display['dias_sem_coleta'] = df_display['data_ultima_coleta'].apply(
+                lambda x: (hoje - pd.to_datetime(x, errors='coerce')).days if pd.notna(x) else None
+            )
+        else:
+            df_display['dias_sem_coleta'] = None
+
         # Preparar DataFrame para exibição
         colunas_pcl = [
             'cnpj', 'razao_social', 'nome_fantasia', 'endereco_logradouro', 'bairro', 'cidade', 'uf', 'cep',
             'data_credenciamento', 'representante',
-            'transportadora', 'frequencia',
-            'acumulado_coletas', 'acumulado_coletas_ano', 'data_ultima_coleta', 'status',
+            'acumulado_coletas', 'acumulado_coletas_ano', 'data_ultima_coleta', 'dias_sem_coleta', 'status',
             'qtd_empresas_cidade'
         ]
 
@@ -1736,9 +1782,8 @@ def _listagem_pcls_fragment():
             'endereco_logradouro': 'Endereço', 'bairro': 'Bairro',
             'cidade': 'Cidade', 'uf': 'UF', 'cep': 'CEP',
             'data_credenciamento': 'Data Credenciamento', 'representante': 'Representante',
-            'transportadora': 'Transportadora', 'frequencia': 'Frequência',
             'acumulado_coletas': 'Coletas Total', 'acumulado_coletas_ano': 'Coletas 2025',
-            'data_ultima_coleta': 'Última Coleta', 'status': 'Status',
+            'data_ultima_coleta': 'Última Coleta', 'dias_sem_coleta': 'Dias s/ Coleta', 'status': 'Status',
             'qtd_empresas_cidade': 'Empresas na Cidade'
         }
 
@@ -1844,6 +1889,18 @@ def _listagem_empresas_fragment():
         if 'coletas_2025' not in df_display.columns:
             df_display['coletas_2025'] = 0
 
+        # ADD-958: Adicionar indicador se empresa já usou voucher
+        df_display['ja_usou_voucher'] = df_display['acumulado_vouchers'].apply(lambda x: 'Sim' if x > 0 else 'Não')
+
+        # ADD-959: Adicionar dias desde última coleta para validação de status
+        if 'ultima_coleta' in df_display.columns:
+            hoje = pd.Timestamp.now().normalize()
+            df_display['dias_sem_coleta'] = df_display['ultima_coleta'].apply(
+                lambda x: (hoje - pd.to_datetime(x, errors='coerce')).days if pd.notna(x) else None
+            )
+        else:
+            df_display['dias_sem_coleta'] = None
+
         # Formatar valores para exibição
         for col in ['acumulado_vouchers', 'acumulado_coletas_nao_voucher', 'acumulado_coletas_total', 'coletas_2025']:
             if col in df_display.columns:
@@ -1853,8 +1910,8 @@ def _listagem_empresas_fragment():
         colunas_empresa = [
             'cnpj', 'razao_social', 'endereco_logradouro', 'bairro', 'cidade', 'uf', 'cep',
             'data_credenciamento', 'representante',
-            'acumulado_coletas_total', 'acumulado_vouchers', 'acumulado_coletas_nao_voucher',
-            'coletas_2025', 'ultima_coleta', 'status',
+            'ja_usou_voucher', 'acumulado_coletas_total', 'acumulado_vouchers', 'acumulado_coletas_nao_voucher',
+            'coletas_2025', 'ultima_coleta', 'ultima_coleta_voucher', 'dias_sem_coleta', 'status',
             'qtd_pcls_cidade'
         ]
 
@@ -1863,9 +1920,10 @@ def _listagem_empresas_fragment():
             'endereco_logradouro': 'Endereço', 'bairro': 'Bairro',
             'cidade': 'Cidade', 'uf': 'UF', 'cep': 'CEP',
             'data_credenciamento': 'Data Credenciamento', 'representante': 'Representante',
-            'acumulado_coletas_total': 'Total Coletas', 'acumulado_vouchers': 'Coletas Voucher',
-            'acumulado_coletas_nao_voucher': 'Coletas Não-Voucher', 'coletas_2025': 'Coletas 2025',
-            'ultima_coleta': 'Última Coleta', 'status': 'Status',
+            'ja_usou_voucher': 'Já Usou Voucher', 'acumulado_coletas_total': 'Total Coletas',
+            'acumulado_vouchers': 'Coletas Voucher', 'acumulado_coletas_nao_voucher': 'Coletas Não-Voucher',
+            'coletas_2025': 'Coletas 2025', 'ultima_coleta': 'Última Coleta',
+            'ultima_coleta_voucher': 'Último Voucher', 'dias_sem_coleta': 'Dias s/ Coleta', 'status': 'Status',
             'qtd_pcls_cidade': 'PCLs na Cidade'
         }
 

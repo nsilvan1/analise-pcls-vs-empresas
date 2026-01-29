@@ -169,6 +169,33 @@ def format_cnpj(cnpj):
     except:
         return str(cnpj)
 
+def extrair_bairro(endereco):
+    """Extrai o bairro do endereço (última parte após a vírgula)"""
+    if pd.isna(endereco) or endereco is None or str(endereco).strip() == '':
+        return ""
+    try:
+        endereco_str = str(endereco).strip()
+        # Dividir por vírgula e pegar a última parte
+        partes = [p.strip() for p in endereco_str.split(',') if p.strip()]
+        if len(partes) >= 2:
+            return partes[-1].upper()
+        return ""
+    except:
+        return ""
+
+def extrair_endereco_sem_bairro(endereco):
+    """Extrai o endereço sem o bairro (remove última parte após vírgula)"""
+    if pd.isna(endereco) or endereco is None or str(endereco).strip() == '':
+        return ""
+    try:
+        endereco_str = str(endereco).strip()
+        partes = [p.strip() for p in endereco_str.split(',') if p.strip()]
+        if len(partes) >= 2:
+            return ', '.join(partes[:-1])
+        return endereco_str
+    except:
+        return str(endereco)
+
 # ============================================
 # COMPONENTES DE UI
 # ============================================
@@ -851,9 +878,12 @@ def normalize_column_names(df):
         'dias sem coleta (não-voucher)': 'dias_sem_coleta_nao_voucher',
         'dias sem coleta (nao-voucher)': 'dias_sem_coleta_nao_voucher',
         # Localização
+        'endereco': 'endereco',
+        'endereço': 'endereco',
         'cidade': 'cidade',
         'estado': 'uf',
         'uf': 'uf',
+        'cep': 'cep',
         'representante': 'representante',
         # Vouchers/Coletas - Empresas
         'acumulado coletas voucher': 'acumulado_vouchers',
@@ -921,6 +951,15 @@ def process_empresas(df_empresas):
     # Formatar CNPJ com zeros à esquerda e pontuação
     if 'cnpj' in df.columns:
         df['cnpj'] = df['cnpj'].apply(format_cnpj)
+
+    # Extrair bairro do endereço (última parte após vírgula)
+    if 'endereco' in df.columns:
+        df['bairro'] = df['endereco'].apply(extrair_bairro)
+        df['endereco_logradouro'] = df['endereco'].apply(extrair_endereco_sem_bairro)
+    else:
+        df['bairro'] = ''
+        df['endereco_logradouro'] = ''
+        df['endereco'] = ''
 
     # Garantir que colunas numéricas existam e sejam numéricas
     if 'acumulado_vouchers' in df.columns:
@@ -1007,6 +1046,15 @@ def process_labs(df_labs):
     # Formatar CNPJ com zeros à esquerda e pontuação
     if 'cnpj' in df.columns:
         df['cnpj'] = df['cnpj'].apply(format_cnpj)
+
+    # Extrair bairro do endereço (última parte após vírgula)
+    if 'endereco' in df.columns:
+        df['bairro'] = df['endereco'].apply(extrair_bairro)
+        df['endereco_logradouro'] = df['endereco'].apply(extrair_endereco_sem_bairro)
+    else:
+        df['bairro'] = ''
+        df['endereco_logradouro'] = ''
+        df['endereco'] = ''
 
     # Garantir que acumulado_coletas seja numérico
     if 'acumulado_coletas' in df.columns:
@@ -1725,13 +1773,19 @@ with tab_listagem_pcls:
         if valor != "Todas":
             st.toast(f"Cidade: {valor}", icon="✅")
 
+    def _on_change_bairro_pcl():
+        valor = st.session_state.get("filtro_bairro_pcl", "Todos")
+        if valor != "Todos":
+            st.toast(f"Bairro: {valor}", icon="✅")
+
     def _limpar_filtro_pcls():
         st.session_state["filtro_estado_pcl"] = "Todos"
         st.session_state["filtro_cidade_pcl"] = "Todas"
+        st.session_state["filtro_bairro_pcl"] = "Todos"
         st.toast("Filtros limpos!", icon="🔄")
 
     # Filtros dentro da aba (usando listas cacheadas)
-    col_filtro1, col_filtro2, col_filtro3 = st.columns([1, 1, 2])
+    col_filtro1, col_filtro2, col_filtro3, col_filtro4 = st.columns([1, 1, 1, 1])
 
     with col_filtro1:
         estados_pcl_lista = ['Todos'] + listas_filtros['pcl']['estados']
@@ -1745,10 +1799,24 @@ with tab_listagem_pcls:
         cidade_pcl_selecionada = st.selectbox("Cidade", cidades_pcl_lista, key="filtro_cidade_pcl", on_change=_on_change_cidade_pcl)
 
     with col_filtro3:
+        # Filtrar bairros baseado na cidade/estado selecionado
+        df_temp_pcl = df_labs.copy()
+        if estado_pcl_selecionado != "Todos":
+            df_temp_pcl = df_temp_pcl[df_temp_pcl['uf'] == estado_pcl_selecionado]
+        if cidade_pcl_selecionada != "Todas":
+            df_temp_pcl = df_temp_pcl[df_temp_pcl['cidade'] == cidade_pcl_selecionada]
+        bairros_pcl_lista = ['Todos'] + sorted(df_temp_pcl['bairro'].dropna().unique().tolist()) if 'bairro' in df_temp_pcl.columns else ['Todos']
+        bairros_pcl_lista = [b for b in bairros_pcl_lista if b and str(b).strip()]  # Remover vazios
+        bairro_pcl_selecionado = st.selectbox("Bairro", bairros_pcl_lista, key="filtro_bairro_pcl", on_change=_on_change_bairro_pcl)
+
+    with col_filtro4:
         st.markdown("<br>", unsafe_allow_html=True)
         st.button("Limpar Filtros", key="limpar_pcls", on_click=_limpar_filtro_pcls)
 
+    # Aplicar filtros
     df_labs_filtered = apply_filters(df_labs, estado_pcl_selecionado, cidade_pcl_selecionada)
+    if bairro_pcl_selecionado != "Todos" and 'bairro' in df_labs_filtered.columns:
+        df_labs_filtered = df_labs_filtered[df_labs_filtered['bairro'] == bairro_pcl_selecionado]
 
     if df_labs_filtered.empty:
         st.warning("Nenhum PCL encontrado com os filtros selecionados.")
@@ -1783,7 +1851,7 @@ with tab_listagem_pcls:
         
         # Preparar DataFrame para exibição
         colunas_pcl = [
-            'cnpj', 'razao_social', 'nome_fantasia', 'cidade', 'uf',
+            'cnpj', 'razao_social', 'nome_fantasia', 'endereco_logradouro', 'bairro', 'cidade', 'uf', 'cep',
             'data_credenciamento', 'representante',
             'transportadora', 'frequencia',
             'acumulado_coletas', 'acumulado_coletas_ano', 'data_ultima_coleta', 'status',
@@ -1792,7 +1860,8 @@ with tab_listagem_pcls:
 
         rename_map_pcl = {
             'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'nome_fantasia': 'Nome Fantasia',
-            'cidade': 'Cidade', 'uf': 'UF',
+            'endereco_logradouro': 'Endereço', 'bairro': 'Bairro',
+            'cidade': 'Cidade', 'uf': 'UF', 'cep': 'CEP',
             'data_credenciamento': 'Data Credenciamento', 'representante': 'Representante',
             'transportadora': 'Transportadora', 'frequencia': 'Frequência',
             'acumulado_coletas': 'Coletas Total', 'acumulado_coletas_ano': 'Coletas 2025',
@@ -1833,13 +1902,19 @@ with tab_listagem_empresas:
         if valor != "Todas":
             st.toast(f"Cidade: {valor}", icon="✅")
 
+    def _on_change_bairro_emp():
+        valor = st.session_state.get("filtro_bairro_emp", "Todos")
+        if valor != "Todos":
+            st.toast(f"Bairro: {valor}", icon="✅")
+
     def _limpar_filtro_empresas():
         st.session_state["filtro_estado_emp"] = "Todos"
         st.session_state["filtro_cidade_emp"] = "Todas"
+        st.session_state["filtro_bairro_emp"] = "Todos"
         st.toast("Filtros limpos!", icon="🔄")
 
     # Filtros dentro da aba
-    col_filtro1, col_filtro2, col_filtro3 = st.columns([1, 1, 2])
+    col_filtro1, col_filtro2, col_filtro3, col_filtro4 = st.columns([1, 1, 1, 1])
 
     with col_filtro1:
         estados_emp_lista = ['Todos'] + listas_filtros['empresa']['estados']
@@ -1853,10 +1928,24 @@ with tab_listagem_empresas:
         cidade_emp_selecionada = st.selectbox("Cidade", cidades_emp_lista, key="filtro_cidade_emp", on_change=_on_change_cidade_emp)
 
     with col_filtro3:
+        # Filtrar bairros baseado na cidade/estado selecionado
+        df_temp = df_empresas.copy()
+        if estado_emp_selecionado != "Todos":
+            df_temp = df_temp[df_temp['uf'] == estado_emp_selecionado]
+        if cidade_emp_selecionada != "Todas":
+            df_temp = df_temp[df_temp['cidade'] == cidade_emp_selecionada]
+        bairros_lista = ['Todos'] + sorted(df_temp['bairro'].dropna().unique().tolist()) if 'bairro' in df_temp.columns else ['Todos']
+        bairros_lista = [b for b in bairros_lista if b and b.strip()]  # Remover vazios
+        bairro_emp_selecionado = st.selectbox("Bairro", bairros_lista, key="filtro_bairro_emp", on_change=_on_change_bairro_emp)
+
+    with col_filtro4:
         st.markdown("<br>", unsafe_allow_html=True)
         st.button("Limpar Filtros", key="limpar_empresas", on_click=_limpar_filtro_empresas)
 
+    # Aplicar filtros
     df_empresas_filtered = apply_filters(df_empresas, estado_emp_selecionado, cidade_emp_selecionada)
+    if bairro_emp_selecionado != "Todos" and 'bairro' in df_empresas_filtered.columns:
+        df_empresas_filtered = df_empresas_filtered[df_empresas_filtered['bairro'] == bairro_emp_selecionado]
 
     if df_empresas_filtered.empty:
         st.warning("Nenhuma empresa encontrada com os filtros selecionados.")
@@ -1909,16 +1998,17 @@ with tab_listagem_empresas:
         
         # Preparar DataFrame para exibição
         colunas_empresa = [
-            'cnpj', 'razao_social', 'cidade', 'uf',
+            'cnpj', 'razao_social', 'endereco_logradouro', 'bairro', 'cidade', 'uf', 'cep',
             'data_credenciamento', 'representante',
             'acumulado_coletas_total', 'acumulado_vouchers', 'acumulado_coletas_nao_voucher',
             'coletas_2025', 'ultima_coleta', 'status',
             'qtd_pcls_cidade'
         ]
-        
+
         rename_map_empresa = {
             'cnpj': 'CNPJ', 'razao_social': 'Razão Social',
-            'cidade': 'Cidade', 'uf': 'UF',
+            'endereco_logradouro': 'Endereço', 'bairro': 'Bairro',
+            'cidade': 'Cidade', 'uf': 'UF', 'cep': 'CEP',
             'data_credenciamento': 'Data Credenciamento', 'representante': 'Representante',
             'acumulado_coletas_total': 'Total Coletas', 'acumulado_vouchers': 'Coletas Voucher',
             'acumulado_coletas_nao_voucher': 'Coletas Não-Voucher', 'coletas_2025': 'Coletas 2025',

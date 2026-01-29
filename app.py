@@ -40,9 +40,80 @@ except Exception as e:
     st.stop()
 
 # ============================================
-# CSS MÍNIMO (PADRÃO STREAMLIT)
+# CSS PARA TELA DE CARREGAMENTO
 # ============================================
-# Removido CSS personalizado - usando tema padrão do Streamlit
+st.markdown("""
+<style>
+/* Esconder indicador "Running" do Streamlit */
+[data-testid="stStatusWidget"] {
+    display: none !important;
+}
+
+/* Esconder mensagem de cache "Running function..." */
+.stSpinner {
+    display: none !important;
+}
+
+/* Estilo para o container de carregamento */
+.loading-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    margin: 2rem 0;
+}
+
+.loading-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    color: var(--text-color);
+}
+
+.loading-subtitle {
+    font-size: 1rem;
+    color: #6b7280;
+    margin-bottom: 0.5rem;
+}
+
+/* Animação de pulso para indicador de carregamento */
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.loading-indicator {
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* Estilo para toast de sucesso customizado */
+.filter-feedback {
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    padding: 0.75rem 1.5rem;
+    background: linear-gradient(135deg, #22C55E 0%, #16A34A 100%);
+    color: white;
+    border-radius: 8px;
+    font-weight: 500;
+    box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
+    z-index: 9999;
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+</style>
+""", unsafe_allow_html=True)
 
 # ============================================
 # FUNÇÕES AUXILIARES
@@ -1033,38 +1104,66 @@ def prepare_display_dataframe(df, colunas_desejadas, rename_map):
 # CARREGAR DADOS
 # ============================================
 
-with st.spinner("Carregando dados..."):
-    df_empresas_raw, df_labs_raw, load_errors, file_info = load_data()
-    
-    if load_errors:
-        for error in load_errors:
-            st.warning(error)
-    
-    if df_empresas_raw.empty and df_labs_raw.empty:
-        st.error("⚠️ Nenhum arquivo encontrado nas pastas 'Acumulado de Coletas - Empresas' e 'Acumulado de Coletas - Labs'")
-        st.stop()
-    
-    df_empresas = process_empresas(df_empresas_raw)
-    df_labs = process_labs(df_labs_raw)
+# Placeholder para tela de carregamento
+loading_placeholder = st.empty()
 
-    # Enriquecer PCLs com dados de logística (transportadora e frequência)
-    df_matriz_logistica, matriz_status = load_matriz_logistica()
-    df_labs = enrich_pcls_with_logistics(df_labs, df_matriz_logistica)
+def show_loading(title, subtitle):
+    """Exibe tela de carregamento limpa"""
+    loading_placeholder.markdown(f"""
+    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4rem 2rem; margin: 2rem 0;">
+        <div style="width: 50px; height: 50px; border: 4px solid #f3f3f3; border-top: 4px solid #3b82f6; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 1.5rem;"></div>
+        <h2 style="margin: 0 0 0.5rem 0; font-weight: 500; color: inherit;">{title}</h2>
+        <p style="margin: 0; color: #6b7280; font-size: 0.95rem;">{subtitle}</p>
+    </div>
+    <style>
+        @keyframes spin {{
+            0% {{ transform: rotate(0deg); }}
+            100% {{ transform: rotate(360deg); }}
+        }}
+    </style>
+    """, unsafe_allow_html=True)
 
-    # ============================================
-    # LISTA DE EXCEÇÕES - CNPJs a serem excluídos das análises
-    # ============================================
-    # CNPJs da própria empresa que não devem ser contabilizados
-    CNPJS_EXCLUIDOS = [
-        '07.339.867/0001-15',  # CAEP - CENTRO AVANÇADO DE ESTUDOS E PESQUISA LTDA (nosso CNPJ)
-    ]
-    
-    # Remover CNPJs excluídos dos dados de Labs (PCLs)
-    pcls_excluidos = 0
-    if not df_labs.empty and 'cnpj' in df_labs.columns:
-        total_antes = len(df_labs)
-        df_labs = df_labs[~df_labs['cnpj'].isin(CNPJS_EXCLUIDOS)]
-        pcls_excluidos = total_antes - len(df_labs)
+show_loading("Carregando dados.", "Conectando ao servidor")
+df_empresas_raw, df_labs_raw, load_errors, file_info = load_data()
+
+if load_errors:
+    loading_placeholder.empty()
+    for error in load_errors:
+        st.warning(error)
+
+if df_empresas_raw.empty and df_labs_raw.empty:
+    loading_placeholder.empty()
+    st.error("⚠️ Nenhum arquivo encontrado nas pastas 'Acumulado de Coletas - Empresas' e 'Acumulado de Coletas - Labs'")
+    st.stop()
+
+show_loading("Carregando dados.", "Processando empresas")
+df_empresas = process_empresas(df_empresas_raw)
+
+show_loading("Carregando dados.", "Processando PCLs")
+df_labs = process_labs(df_labs_raw)
+
+show_loading("Carregando dados.", "Carregando matriz logística")
+# Enriquecer PCLs com dados de logística (transportadora e frequência)
+df_matriz_logistica, matriz_status = load_matriz_logistica()
+df_labs = enrich_pcls_with_logistics(df_labs, df_matriz_logistica)
+
+# ============================================
+# LISTA DE EXCEÇÕES - CNPJs a serem excluídos das análises
+# ============================================
+# CNPJs da própria empresa que não devem ser contabilizados
+CNPJS_EXCLUIDOS = [
+    '07.339.867/0001-15',  # CAEP - CENTRO AVANÇADO DE ESTUDOS E PESQUISA LTDA (nosso CNPJ)
+]
+
+# Remover CNPJs excluídos dos dados de Labs (PCLs)
+pcls_excluidos = 0
+if not df_labs.empty and 'cnpj' in df_labs.columns:
+    total_antes = len(df_labs)
+    df_labs = df_labs[~df_labs['cnpj'].isin(CNPJS_EXCLUIDOS)]
+    pcls_excluidos = total_antes - len(df_labs)
+
+# Limpar tela de carregamento
+loading_placeholder.empty()
     
     # Remover CNPJs excluídos dos dados de Empresas (se necessário)
     # if not df_empresas.empty and 'cnpj' in df_empresas.columns:
@@ -1109,6 +1208,13 @@ st.markdown("---")
 def _limpar_filtro_visao_estado():
     """Callback para limpar filtro da aba Por Estado"""
     st.session_state["estado_visao_uf"] = "Todos"
+    st.toast("Filtros limpos!", icon="🔄")
+
+def _on_change_estado_visao():
+    """Callback quando estado é alterado na aba Por Estado"""
+    valor = st.session_state.get("estado_visao_uf", "Todos")
+    if valor != "Todos":
+        st.toast(f"Filtrado por: {valor}", icon="✅")
 
 @st.fragment
 def _visao_estado_fragment():
@@ -1124,7 +1230,8 @@ def _visao_estado_fragment():
         estado_filtro = st.selectbox(
             "Selecione o Estado",
             ["Todos"] + estados_lista,
-            key="estado_visao_uf"
+            key="estado_visao_uf",
+            on_change=_on_change_estado_visao
         )
     with col_btn:
         st.markdown("<br>", unsafe_allow_html=True)
@@ -1581,14 +1688,15 @@ with tab_analise_coletas:
             
             # Top PCLs por coletas
             create_section_header("🏆", "Top 20 PCLs por Volume de Coletas")
-            
-            cols_display = ['razao_social', 'cidade', 'uf', 'acumulado_coletas', 'status']
+
+            cols_display = ['razao_social', 'representante', 'cidade', 'uf', 'acumulado_coletas', 'status']
             cols_available = [c for c in cols_display if c in df_labs.columns]
-            
+
             if cols_available:
                 top_pcls = df_labs.nlargest(20, 'acumulado_coletas')[cols_available]
                 rename_map = {
                     'razao_social': 'Razão Social',
+                    'representante': 'Representante',
                     'cidade': 'Cidade',
                     'uf': 'UF',
                     'acumulado_coletas': 'Total Coletas',
@@ -1606,25 +1714,38 @@ with tab_analise_coletas:
 with tab_listagem_pcls:
     create_section_header("🏥", "Listagem de PCLs", "Base completa de laboratórios credenciados")
 
+    # Callbacks para feedback visual
+    def _on_change_estado_pcl():
+        valor = st.session_state.get("filtro_estado_pcl", "Todos")
+        if valor != "Todos":
+            st.toast(f"Estado: {valor}", icon="✅")
+
+    def _on_change_cidade_pcl():
+        valor = st.session_state.get("filtro_cidade_pcl", "Todas")
+        if valor != "Todas":
+            st.toast(f"Cidade: {valor}", icon="✅")
+
+    def _limpar_filtro_pcls():
+        st.session_state["filtro_estado_pcl"] = "Todos"
+        st.session_state["filtro_cidade_pcl"] = "Todas"
+        st.toast("Filtros limpos!", icon="🔄")
+
     # Filtros dentro da aba (usando listas cacheadas)
     col_filtro1, col_filtro2, col_filtro3 = st.columns([1, 1, 2])
 
     with col_filtro1:
         estados_pcl_lista = ['Todos'] + listas_filtros['pcl']['estados']
-        estado_pcl_selecionado = st.selectbox("Estado", estados_pcl_lista, key="filtro_estado_pcl")
+        estado_pcl_selecionado = st.selectbox("Estado", estados_pcl_lista, key="filtro_estado_pcl", on_change=_on_change_estado_pcl)
 
     with col_filtro2:
         if estado_pcl_selecionado != "Todos":
             cidades_pcl_lista = ['Todas'] + listas_filtros['pcl']['cidades_por_estado'].get(estado_pcl_selecionado, [])
         else:
             cidades_pcl_lista = ['Todas'] + listas_filtros['pcl']['cidades']
-        cidade_pcl_selecionada = st.selectbox("Cidade", cidades_pcl_lista, key="filtro_cidade_pcl")
+        cidade_pcl_selecionada = st.selectbox("Cidade", cidades_pcl_lista, key="filtro_cidade_pcl", on_change=_on_change_cidade_pcl)
 
     with col_filtro3:
         st.markdown("<br>", unsafe_allow_html=True)
-        def _limpar_filtro_pcls():
-            st.session_state["filtro_estado_pcl"] = "Todos"
-            st.session_state["filtro_cidade_pcl"] = "Todas"
         st.button("Limpar Filtros", key="limpar_pcls", on_click=_limpar_filtro_pcls)
 
     df_labs_filtered = apply_filters(df_labs, estado_pcl_selecionado, cidade_pcl_selecionada)
@@ -1701,25 +1822,38 @@ with tab_listagem_pcls:
 with tab_listagem_empresas:
     create_section_header("🏢", "Listagem de Empresas", "Base completa de empresas credenciadas")
 
+    # Callbacks para feedback visual
+    def _on_change_estado_emp():
+        valor = st.session_state.get("filtro_estado_emp", "Todos")
+        if valor != "Todos":
+            st.toast(f"Estado: {valor}", icon="✅")
+
+    def _on_change_cidade_emp():
+        valor = st.session_state.get("filtro_cidade_emp", "Todas")
+        if valor != "Todas":
+            st.toast(f"Cidade: {valor}", icon="✅")
+
+    def _limpar_filtro_empresas():
+        st.session_state["filtro_estado_emp"] = "Todos"
+        st.session_state["filtro_cidade_emp"] = "Todas"
+        st.toast("Filtros limpos!", icon="🔄")
+
     # Filtros dentro da aba
     col_filtro1, col_filtro2, col_filtro3 = st.columns([1, 1, 2])
 
     with col_filtro1:
         estados_emp_lista = ['Todos'] + listas_filtros['empresa']['estados']
-        estado_emp_selecionado = st.selectbox("Estado", estados_emp_lista, key="filtro_estado_emp")
+        estado_emp_selecionado = st.selectbox("Estado", estados_emp_lista, key="filtro_estado_emp", on_change=_on_change_estado_emp)
 
     with col_filtro2:
         if estado_emp_selecionado != "Todos":
             cidades_emp_lista = ['Todas'] + listas_filtros['empresa']['cidades_por_estado'].get(estado_emp_selecionado, [])
         else:
             cidades_emp_lista = ['Todas'] + listas_filtros['empresa']['cidades']
-        cidade_emp_selecionada = st.selectbox("Cidade", cidades_emp_lista, key="filtro_cidade_emp")
+        cidade_emp_selecionada = st.selectbox("Cidade", cidades_emp_lista, key="filtro_cidade_emp", on_change=_on_change_cidade_emp)
 
     with col_filtro3:
         st.markdown("<br>", unsafe_allow_html=True)
-        def _limpar_filtro_empresas():
-            st.session_state["filtro_estado_emp"] = "Todos"
-            st.session_state["filtro_cidade_emp"] = "Todas"
         st.button("Limpar Filtros", key="limpar_empresas", on_click=_limpar_filtro_empresas)
 
     df_empresas_filtered = apply_filters(df_empresas, estado_emp_selecionado, cidade_emp_selecionada)
@@ -2067,11 +2201,11 @@ with tab_analises_especificas:
     elif analise_tipo == "Top PCLs por volume de coletas":
         if not df_labs.empty and 'acumulado_coletas' in df_labs.columns:
             top_pcls = df_labs.nlargest(50, 'acumulado_coletas')
-            cols = ['cnpj', 'razao_social', 'cidade', 'uf', 'transportadora', 'frequencia', 'acumulado_coletas', 'status']
+            cols = ['cnpj', 'razao_social', 'representante', 'cidade', 'uf', 'transportadora', 'frequencia', 'acumulado_coletas', 'status']
             cols_available = [c for c in cols if c in top_pcls.columns]
             df_display = top_pcls[cols_available].copy()
-            rename_map = {'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'cidade': 'Cidade',
-                          'uf': 'UF', 'transportadora': 'Transportadora', 'frequencia': 'Frequência',
+            rename_map = {'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'representante': 'Representante',
+                          'cidade': 'Cidade', 'uf': 'UF', 'transportadora': 'Transportadora', 'frequencia': 'Frequência',
                           'acumulado_coletas': 'Total Coletas', 'status': 'Status'}
             df_display = df_display.rename(columns=rename_map)
             st.dataframe(df_display, use_container_width=True, hide_index=True, height=500)

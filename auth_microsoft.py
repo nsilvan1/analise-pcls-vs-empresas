@@ -610,8 +610,7 @@ def create_login_page(auth: MicrosoftAuth) -> bool:
                 user_info = auth.get_user_info(access_token)
                 if user_info:
                     AuthManager.login(user_info, access_token, refresh_token, expires_in)
-                    st.success("✅ Login realizado com sucesso!")
-                    st.balloons()
+                    st.toast("Login realizado com sucesso!", icon="✅")
                     st.query_params.clear()
                     return True
 

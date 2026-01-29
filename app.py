@@ -546,15 +546,39 @@ def load_matriz_logistica():
     }
 
     def process_matriz_df(df_raw):
-        """Processa o DataFrame da matriz logística"""
-        # Normalizar nomes de colunas (lidar com encoding)
-        df_raw.columns = ['cidade_uf_transporte', 'transporte', 'municipio', 'uf',
-                     'porta_a_porta', 'prazo_total', 'frequencia', 'col13', 'col14']
-        # Manter apenas colunas necessárias
-        df_processed = df_raw[['municipio', 'uf', 'transporte', 'frequencia']].copy()
-        # Normalizar cidade para match
-        df_processed['municipio'] = df_processed['municipio'].str.strip().str.upper()
-        df_processed['uf'] = df_processed['uf'].str.strip().str.upper()
+        """Processa o DataFrame da matriz logística - busca colunas por nome exato"""
+        colunas_originais = df_raw.columns.tolist()
+
+        # Mapear colunas por nome exato (case insensitive)
+        col_map = {}
+        for col in colunas_originais:
+            col_upper = str(col).upper().strip()
+            if col_upper == 'TRANSPORTE':
+                col_map['transporte'] = col
+            elif col_upper in ['FREQUENCIA', 'FREQUÊNCIA']:
+                col_map['frequencia'] = col
+            elif col_upper in ['MUNICÍPIO', 'MUNICIPIO']:
+                col_map['municipio'] = col
+            elif col_upper == 'UF':
+                col_map['uf'] = col
+
+        # Debug: mostrar colunas encontradas
+        print(f"[MATRIZ LOGISTICA] Colunas do arquivo: {colunas_originais}")
+        print(f"[MATRIZ LOGISTICA] Mapeamento: {col_map}")
+
+        # Verificar se encontrou as colunas essenciais
+        required = ['transporte', 'frequencia', 'municipio', 'uf']
+        missing = [r for r in required if r not in col_map]
+        if missing:
+            raise ValueError(f"Colunas não encontradas: {missing}. Disponíveis: {colunas_originais}")
+
+        # Criar DataFrame processado com as colunas corretas
+        df_processed = pd.DataFrame()
+        df_processed['municipio'] = df_raw[col_map['municipio']].astype(str).str.strip().str.upper()
+        df_processed['uf'] = df_raw[col_map['uf']].astype(str).str.strip().str.upper()
+        df_processed['transporte'] = df_raw[col_map['transporte']].astype(str).str.strip()
+        df_processed['frequencia'] = df_raw[col_map['frequencia']].astype(str).str.strip()
+
         return df_processed
 
     # Carregar apenas do SharePoint
@@ -1774,6 +1798,7 @@ def _listagem_pcls_fragment():
             'cnpj', 'razao_social', 'nome_fantasia', 'endereco_logradouro', 'bairro', 'cidade', 'uf', 'cep',
             'data_credenciamento', 'representante',
             'acumulado_coletas', 'acumulado_coletas_ano', 'data_ultima_coleta', 'dias_sem_coleta', 'status',
+            'transportadora', 'frequencia',
             'qtd_empresas_cidade'
         ]
 
@@ -1784,6 +1809,7 @@ def _listagem_pcls_fragment():
             'data_credenciamento': 'Data Credenciamento', 'representante': 'Representante',
             'acumulado_coletas': 'Coletas Total', 'acumulado_coletas_ano': 'Coletas 2025',
             'data_ultima_coleta': 'Última Coleta', 'dias_sem_coleta': 'Dias s/ Coleta', 'status': 'Status',
+            'transportadora': 'Transportadora', 'frequencia': 'Frequência',
             'qtd_empresas_cidade': 'Empresas na Cidade'
         }
 
@@ -1794,10 +1820,35 @@ def _listagem_pcls_fragment():
         else:
             st.warning("Nenhum dado disponível para exibição.")
 
-        # Download
+        # Download - ADD-956: incluir campos logísticos (transportadora, frequência)
+        colunas_download_pcl = [
+            'cnpj', 'razao_social', 'nome_fantasia', 'endereco_logradouro', 'bairro', 'cidade', 'uf', 'cep',
+            'data_credenciamento', 'representante',
+            'acumulado_coletas', 'acumulado_coletas_ano', 'data_ultima_coleta', 'dias_sem_coleta', 'status',
+            'transportadora', 'frequencia',
+            'qtd_empresas_cidade', 'qtd_empresas_ativas_cidade', 'qtd_empresas_inativas_cidade', 'qtd_empresas_usaram_voucher'
+        ]
+
+        rename_map_download_pcl = {
+            'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'nome_fantasia': 'Nome Fantasia',
+            'endereco_logradouro': 'Endereço', 'bairro': 'Bairro',
+            'cidade': 'Cidade', 'uf': 'UF', 'cep': 'CEP',
+            'data_credenciamento': 'Data Credenciamento', 'representante': 'Representante',
+            'acumulado_coletas': 'Coletas Total', 'acumulado_coletas_ano': 'Coletas 2025',
+            'data_ultima_coleta': 'Última Coleta', 'dias_sem_coleta': 'Dias s/ Coleta', 'status': 'Status',
+            'transportadora': 'Transportadora', 'frequencia': 'Frequência',
+            'qtd_empresas_cidade': 'Empresas na Cidade', 'qtd_empresas_ativas_cidade': 'Empresas Ativas',
+            'qtd_empresas_inativas_cidade': 'Empresas Inativas', 'qtd_empresas_usaram_voucher': 'Empresas c/ Voucher'
+        }
+
+        # Selecionar apenas colunas existentes para download
+        colunas_existentes = [c for c in colunas_download_pcl if c in df_display.columns]
+        df_download = df_display[colunas_existentes].copy()
+        df_download = df_download.rename(columns={k: v for k, v in rename_map_download_pcl.items() if k in df_download.columns})
+
         output = BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df_display.to_excel(writer, index=False, sheet_name='PCLs')
+            df_download.to_excel(writer, index=False, sheet_name='PCLs')
 
         st.download_button(
             label="📥 Download Excel",

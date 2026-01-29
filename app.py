@@ -1888,6 +1888,284 @@ def _listagem_empresas_fragment():
             mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
 
+@st.fragment
+def _analises_especificas_fragment():
+    """Conteúdo da aba Análises Específicas. Fragment para manter a aba ativa ao mudar filtros."""
+    create_section_header("🔍", "Análises Específicas", "Consultas customizadas conforme demanda")
+
+    analise_tipo = st.selectbox(
+        "Selecione a análise",
+        [
+            "1. PCLs em cidades SEM Empresas credenciadas",
+            "2. PCLs em cidades COM Empresas INATIVAS (365 dias)",
+            "3. Empresas em cidades SEM PCL credenciado",
+            "4. Empresas em cidades COM PCL INATIVO (90 dias)",
+            "Top PCLs por volume de coletas",
+            "Estados com menor cobertura"
+        ]
+    )
+
+    # Análise 1: PCLs em cidades SEM Empresas
+    if analise_tipo == "1. PCLs em cidades SEM Empresas credenciadas":
+        st.markdown("**Descrição:** Lista de PCLs em cidades que não têm nenhuma empresa credenciada.")
+
+        if not df_labs.empty and not df_empresas.empty:
+            # Normalizar cidades antes de comparar
+            df_labs_norm = normalize_city_column(df_labs.copy().reset_index(drop=True), 'cidade')
+            df_empresas_norm = normalize_city_column(df_empresas.copy().reset_index(drop=True), 'cidade')
+
+            cidades_com_empresa = set(df_empresas_norm['cidade'].dropna().unique()) if 'cidade' in df_empresas_norm.columns else set()
+            cidades_com_empresa = {c for c in cidades_com_empresa if c != ''}  # Remover strings vazias
+
+            df_result_norm = df_labs_norm[~df_labs_norm['cidade'].isin(cidades_com_empresa)] if 'cidade' in df_labs_norm.columns else pd.DataFrame()
+            # Usar o dataframe original para manter os dados originais
+            if not df_result_norm.empty:
+                df_result = df_labs.iloc[df_result_norm.index].copy()
+            else:
+                df_result = pd.DataFrame()
+
+            if not df_result.empty:
+                st.success(f"✅ Encontrados {len(df_result)} PCLs em cidades sem empresas credenciadas")
+
+                cols = ['cnpj', 'razao_social', 'nome_fantasia', 'cidade', 'uf', 'transportadora', 'frequencia', 'status', 'acumulado_coletas', 'data_ultima_coleta']
+                cols_available = [c for c in cols if c in df_result.columns]
+
+                # Fallback: usar todas as colunas se nenhuma das esperadas existir
+                if not cols_available:
+                    cols_available = df_result.columns.tolist()
+
+                df_display = df_result[cols_available].copy()
+
+                rename_map = {'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'nome_fantasia': 'Nome Fantasia',
+                              'cidade': 'Cidade', 'uf': 'UF', 'transportadora': 'Transportadora', 'frequencia': 'Frequência',
+                              'status': 'Status', 'acumulado_coletas': 'Coletas', 'data_ultima_coleta': 'Última Coleta'}
+                df_display = df_display.rename(columns=rename_map)
+
+                st.dataframe(df_display, use_container_width=True, hide_index=True, height=500)
+
+                # Download
+                output = BytesIO()
+                with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                    df_display.to_excel(writer, index=False, sheet_name='PCLs sem Empresas')
+                st.download_button("📥 Download Excel", output.getvalue(),
+                                   f'pcls_sem_empresas_{datetime.now().strftime("%Y%m%d")}.xlsx',
+                                   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            else:
+                st.info("✅ Todos os PCLs estão em cidades com empresas credenciadas.")
+        else:
+            st.warning("Dados insuficientes para análise.")
+
+    # Análise 2: PCLs em cidades COM Empresas INATIVAS
+    elif analise_tipo == "2. PCLs em cidades COM Empresas INATIVAS (365 dias)":
+        st.markdown("**Descrição:** Lista de PCLs em cidades que têm empresas credenciadas, mas TODAS as empresas estão inativas (>365 dias sem voucher).")
+
+        if not df_labs.empty and not df_empresas.empty:
+            # Normalizar cidades antes de comparar
+            df_labs_norm = normalize_city_column(df_labs.copy().reset_index(drop=True), 'cidade')
+            df_empresas_norm = normalize_city_column(df_empresas.copy().reset_index(drop=True), 'cidade')
+
+            # Encontrar cidades onde TODAS as empresas são inativas
+            if 'cidade' in df_empresas_norm.columns and 'status' in df_empresas_norm.columns:
+                empresas_por_cidade_analise = df_empresas_norm.groupby('cidade').agg({
+                    'status': lambda x: (x == 'Ativo').sum()
+                }).reset_index()
+                empresas_por_cidade_analise.columns = ['cidade', 'empresas_ativas']
+
+                # Cidades com empresas, mas nenhuma ativa
+                cidades_empresas_inativas = set(empresas_por_cidade_analise[empresas_por_cidade_analise['empresas_ativas'] == 0]['cidade'])
+                cidades_empresas_inativas = {c for c in cidades_empresas_inativas if c != ''}  # Remover strings vazias
+
+                # PCLs nessas cidades
+                df_result_norm = df_labs_norm[df_labs_norm['cidade'].isin(cidades_empresas_inativas)] if 'cidade' in df_labs_norm.columns else pd.DataFrame()
+                # Usar o dataframe original para manter os dados originais
+                if not df_result_norm.empty:
+                    df_result = df_labs.iloc[df_result_norm.index].copy()
+                else:
+                    df_result = pd.DataFrame()
+
+                if not df_result.empty:
+                    st.warning(f"⚠️ Encontrados {len(df_result)} PCLs em cidades onde todas as empresas estão inativas")
+
+                    cols = ['cnpj', 'razao_social', 'nome_fantasia', 'cidade', 'uf', 'transportadora', 'frequencia', 'status', 'acumulado_coletas', 'data_ultima_coleta']
+                    cols_available = [c for c in cols if c in df_result.columns]
+
+                    # Fallback: usar todas as colunas se nenhuma das esperadas existir
+                    if not cols_available:
+                        cols_available = df_result.columns.tolist()
+
+                    df_display = df_result[cols_available].copy()
+
+                    # Adicionar quantidade de empresas inativas na cidade
+                    # Criar mapeamento de cidade normalizada para original
+                    cidade_map_norm_to_orig = dict(zip(df_empresas_norm['cidade'], df_empresas['cidade']))
+                    # Mapear cidades normalizadas de volta para originais
+                    cidades_originais = {cidade_map_norm_to_orig.get(c, c) for c in cidades_empresas_inativas if c in cidade_map_norm_to_orig}
+                    emp_count = df_empresas[df_empresas['cidade'].isin(cidades_originais)].groupby('cidade').size().to_dict()
+                    df_display['empresas_inativas_cidade'] = df_display['cidade'].map(emp_count).fillna(0).astype(int)
+
+                    rename_map = {'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'nome_fantasia': 'Nome Fantasia',
+                                  'cidade': 'Cidade', 'uf': 'UF', 'transportadora': 'Transportadora', 'frequencia': 'Frequência',
+                                  'status': 'Status PCL', 'acumulado_coletas': 'Coletas', 'data_ultima_coleta': 'Última Coleta',
+                                  'empresas_inativas_cidade': 'Empresas Inativas na Cidade'}
+                    df_display = df_display.rename(columns=rename_map)
+
+                    st.dataframe(df_display, use_container_width=True, hide_index=True, height=500)
+
+                    output = BytesIO()
+                    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                        df_display.to_excel(writer, index=False, sheet_name='PCLs Empresas Inativas')
+                    st.download_button("📥 Download Excel", output.getvalue(),
+                                       f'pcls_empresas_inativas_{datetime.now().strftime("%Y%m%d")}.xlsx',
+                                       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+                else:
+                    st.success("✅ Não há PCLs em cidades onde todas as empresas estão inativas.")
+            else:
+                st.warning("Colunas necessárias não encontradas nos dados.")
+        else:
+            st.warning("Dados insuficientes para análise.")
+
+    # Análise 3: Empresas sem PCL na cidade
+    elif analise_tipo == "3. Empresas em cidades SEM PCL credenciado":
+        st.markdown("**Descrição:** Lista de empresas em cidades que não têm nenhum PCL credenciado.")
+
+        if not df_labs.empty and not df_empresas.empty:
+            # Normalizar cidades antes de comparar
+            df_labs_norm = normalize_city_column(df_labs.copy().reset_index(drop=True), 'cidade')
+            df_empresas_norm = normalize_city_column(df_empresas.copy().reset_index(drop=True), 'cidade')
+
+            cidades_com_pcl = set(df_labs_norm['cidade'].dropna().unique()) if 'cidade' in df_labs_norm.columns else set()
+            cidades_com_pcl = {c for c in cidades_com_pcl if c != ''}  # Remover strings vazias
+
+            df_result_norm = df_empresas_norm[~df_empresas_norm['cidade'].isin(cidades_com_pcl)] if 'cidade' in df_empresas_norm.columns else pd.DataFrame()
+            # Usar o dataframe original para manter os dados originais
+            if not df_result_norm.empty:
+                df_result = df_empresas.iloc[df_result_norm.index].copy()
+            else:
+                df_result = pd.DataFrame()
+
+            if not df_result.empty:
+                st.error(f"❌ Encontradas {len(df_result)} empresas em cidades sem PCL credenciado")
+
+                cols = ['cnpj', 'razao_social', 'nome_fantasia', 'cidade', 'uf', 'status', 'acumulado_vouchers', 'data_ultima_utilizacao']
+                cols_available = [c for c in cols if c in df_result.columns]
+
+                # Fallback: usar todas as colunas se nenhuma das esperadas existir
+                if not cols_available:
+                    cols_available = df_result.columns.tolist()
+
+                df_display = df_result[cols_available].copy()
+
+                rename_map = {'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'nome_fantasia': 'Nome Fantasia',
+                              'cidade': 'Cidade', 'uf': 'UF', 'status': 'Status',
+                              'acumulado_vouchers': 'Vouchers', 'data_ultima_utilizacao': 'Última Utilização'}
+                df_display = df_display.rename(columns=rename_map)
+
+                st.dataframe(df_display, use_container_width=True, hide_index=True, height=500)
+
+                output = BytesIO()
+                with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                    df_display.to_excel(writer, index=False, sheet_name='Empresas sem PCL')
+                st.download_button("📥 Download Excel", output.getvalue(),
+                                   f'empresas_sem_pcl_{datetime.now().strftime("%Y%m%d")}.xlsx',
+                                   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            else:
+                st.success("✅ Todas as empresas estão em cidades com PCL credenciado.")
+        else:
+            st.warning("Dados insuficientes para análise.")
+
+    # Análise 4: Empresas em cidades COM PCL INATIVO
+    elif analise_tipo == "4. Empresas em cidades COM PCL INATIVO (90 dias)":
+        st.markdown("**Descrição:** Lista de empresas em cidades que têm PCL credenciado, mas TODOS os PCLs estão inativos (>90 dias sem coleta).")
+
+        if not df_labs.empty and not df_empresas.empty:
+            # Normalizar cidades antes de comparar
+            df_labs_norm = normalize_city_column(df_labs.copy().reset_index(drop=True), 'cidade')
+            df_empresas_norm = normalize_city_column(df_empresas.copy().reset_index(drop=True), 'cidade')
+
+            # Encontrar cidades onde TODOS os PCLs são inativos
+            if 'cidade' in df_labs_norm.columns and 'status' in df_labs_norm.columns:
+                pcls_por_cidade_analise = df_labs_norm.groupby('cidade').agg({
+                    'status': lambda x: (x == 'Ativo').sum()
+                }).reset_index()
+                pcls_por_cidade_analise.columns = ['cidade', 'pcls_ativos']
+
+                # Cidades com PCLs, mas nenhum ativo
+                cidades_pcls_inativos = set(pcls_por_cidade_analise[pcls_por_cidade_analise['pcls_ativos'] == 0]['cidade'])
+                cidades_pcls_inativos = {c for c in cidades_pcls_inativos if c != ''}  # Remover strings vazias
+
+                # Empresas nessas cidades
+                df_result_norm = df_empresas_norm[df_empresas_norm['cidade'].isin(cidades_pcls_inativos)] if 'cidade' in df_empresas_norm.columns else pd.DataFrame()
+                # Usar o dataframe original para manter os dados originais
+                if not df_result_norm.empty:
+                    df_result = df_empresas.iloc[df_result_norm.index].copy()
+                else:
+                    df_result = pd.DataFrame()
+
+                if not df_result.empty:
+                    st.warning(f"⚠️ Encontradas {len(df_result)} empresas em cidades onde todos os PCLs estão inativos")
+
+                    cols = ['cnpj', 'razao_social', 'nome_fantasia', 'cidade', 'uf', 'status', 'acumulado_vouchers', 'data_ultima_utilizacao']
+                    cols_available = [c for c in cols if c in df_result.columns]
+
+                    # Fallback: usar todas as colunas se nenhuma das esperadas existir
+                    if not cols_available:
+                        cols_available = df_result.columns.tolist()
+
+                    df_display = df_result[cols_available].copy()
+
+                    # Adicionar quantidade de PCLs inativos na cidade
+                    # Criar mapeamento de cidade normalizada para original
+                    cidade_map_norm_to_orig = dict(zip(df_labs_norm['cidade'], df_labs['cidade']))
+                    # Mapear cidades normalizadas de volta para originais
+                    cidades_originais = {cidade_map_norm_to_orig.get(c, c) for c in cidades_pcls_inativos if c in cidade_map_norm_to_orig}
+                    pcl_count = df_labs[df_labs['cidade'].isin(cidades_originais)].groupby('cidade').size().to_dict()
+                    df_display['pcls_inativos_cidade'] = df_display['cidade'].map(pcl_count).fillna(0).astype(int)
+
+                    rename_map = {'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'nome_fantasia': 'Nome Fantasia',
+                                  'cidade': 'Cidade', 'uf': 'UF', 'status': 'Status Empresa',
+                                  'acumulado_vouchers': 'Vouchers', 'data_ultima_utilizacao': 'Última Utilização',
+                                  'pcls_inativos_cidade': 'PCLs Inativos na Cidade'}
+                    df_display = df_display.rename(columns=rename_map)
+
+                    st.dataframe(df_display, use_container_width=True, hide_index=True, height=500)
+
+                    output = BytesIO()
+                    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                        df_display.to_excel(writer, index=False, sheet_name='Empresas PCLs Inativos')
+                    st.download_button("📥 Download Excel", output.getvalue(),
+                                       f'empresas_pcls_inativos_{datetime.now().strftime("%Y%m%d")}.xlsx',
+                                       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+                else:
+                    st.success("✅ Não há empresas em cidades onde todos os PCLs estão inativos.")
+            else:
+                st.warning("Colunas necessárias não encontradas nos dados.")
+        else:
+            st.warning("Dados insuficientes para análise.")
+
+    # Top PCLs por volume
+    elif analise_tipo == "Top PCLs por volume de coletas":
+        if not df_labs.empty and 'acumulado_coletas' in df_labs.columns:
+            top_pcls = df_labs.nlargest(50, 'acumulado_coletas')
+            cols = ['cnpj', 'razao_social', 'representante', 'cidade', 'uf', 'transportadora', 'frequencia', 'acumulado_coletas', 'status']
+            cols_available = [c for c in cols if c in top_pcls.columns]
+            df_display = top_pcls[cols_available].copy()
+            rename_map = {'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'representante': 'Representante',
+                          'cidade': 'Cidade', 'uf': 'UF', 'transportadora': 'Transportadora', 'frequencia': 'Frequência',
+                          'acumulado_coletas': 'Total Coletas', 'status': 'Status'}
+            df_display = df_display.rename(columns=rename_map)
+            st.dataframe(df_display, use_container_width=True, hide_index=True, height=500)
+
+    # Estados com menor cobertura
+    elif analise_tipo == "Estados com menor cobertura":
+        if not df_labs.empty and 'uf' in df_labs.columns:
+            cobertura = df_labs.groupby('uf').agg({
+                'cidade': 'nunique',
+                'acumulado_coletas': 'sum' if 'acumulado_coletas' in df_labs.columns else 'count'
+            }).reset_index()
+            cobertura.columns = ['UF', 'Cidades Atendidas', 'Total Coletas']
+            cobertura = cobertura.sort_values('Cidades Atendidas')
+            st.dataframe(cobertura, use_container_width=True, hide_index=True)
+
 # Abas de navegação (visual original). A aba "Por Estado" usa fragment para manter a aba ativa ao mudar o selectbox.
 tab_visao_geral, tab_visao_estado, tab_analise_coletas, tab_listagem_pcls, tab_listagem_empresas, tab_analises_especificas, tab_ajuda = st.tabs([
     "📈 Visão Geral",
@@ -2052,280 +2330,7 @@ with tab_listagem_empresas:
     _listagem_empresas_fragment()
 
 with tab_analises_especificas:
-    create_section_header("🔍", "Análises Específicas", "Consultas customizadas conforme demanda")
-    
-    analise_tipo = st.selectbox(
-        "Selecione a análise",
-        [
-            "1. PCLs em cidades SEM Empresas credenciadas",
-            "2. PCLs em cidades COM Empresas INATIVAS (365 dias)",
-            "3. Empresas em cidades SEM PCL credenciado",
-            "4. Empresas em cidades COM PCL INATIVO (90 dias)",
-            "Top PCLs por volume de coletas",
-            "Estados com menor cobertura"
-        ]
-    )
-    
-    # Análise 1: PCLs em cidades SEM Empresas
-    if analise_tipo == "1. PCLs em cidades SEM Empresas credenciadas":
-        st.markdown("**Descrição:** Lista de PCLs em cidades que não têm nenhuma empresa credenciada.")
-        
-        if not df_labs.empty and not df_empresas.empty:
-            # Normalizar cidades antes de comparar
-            df_labs_norm = normalize_city_column(df_labs.copy().reset_index(drop=True), 'cidade')
-            df_empresas_norm = normalize_city_column(df_empresas.copy().reset_index(drop=True), 'cidade')
-            
-            cidades_com_empresa = set(df_empresas_norm['cidade'].dropna().unique()) if 'cidade' in df_empresas_norm.columns else set()
-            cidades_com_empresa = {c for c in cidades_com_empresa if c != ''}  # Remover strings vazias
-            
-            df_result_norm = df_labs_norm[~df_labs_norm['cidade'].isin(cidades_com_empresa)] if 'cidade' in df_labs_norm.columns else pd.DataFrame()
-            # Usar o dataframe original para manter os dados originais
-            if not df_result_norm.empty:
-                df_result = df_labs.iloc[df_result_norm.index].copy()
-            else:
-                df_result = pd.DataFrame()
-            
-            if not df_result.empty:
-                st.success(f"✅ Encontrados {len(df_result)} PCLs em cidades sem empresas credenciadas")
-                
-                cols = ['cnpj', 'razao_social', 'nome_fantasia', 'cidade', 'uf', 'transportadora', 'frequencia', 'status', 'acumulado_coletas', 'data_ultima_coleta']
-                cols_available = [c for c in cols if c in df_result.columns]
-
-                # Fallback: usar todas as colunas se nenhuma das esperadas existir
-                if not cols_available:
-                    cols_available = df_result.columns.tolist()
-
-                df_display = df_result[cols_available].copy()
-
-                rename_map = {'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'nome_fantasia': 'Nome Fantasia',
-                              'cidade': 'Cidade', 'uf': 'UF', 'transportadora': 'Transportadora', 'frequencia': 'Frequência',
-                              'status': 'Status', 'acumulado_coletas': 'Coletas', 'data_ultima_coleta': 'Última Coleta'}
-                df_display = df_display.rename(columns=rename_map)
-
-                st.dataframe(df_display, use_container_width=True, hide_index=True, height=500)
-
-                # Download
-                output = BytesIO()
-                with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                    df_display.to_excel(writer, index=False, sheet_name='PCLs sem Empresas')
-                st.download_button("📥 Download Excel", output.getvalue(), 
-                                   f'pcls_sem_empresas_{datetime.now().strftime("%Y%m%d")}.xlsx',
-                                   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-            else:
-                st.info("✅ Todos os PCLs estão em cidades com empresas credenciadas.")
-        else:
-            st.warning("Dados insuficientes para análise.")
-    
-    # Análise 2: PCLs em cidades COM Empresas INATIVAS
-    elif analise_tipo == "2. PCLs em cidades COM Empresas INATIVAS (365 dias)":
-        st.markdown("**Descrição:** Lista de PCLs em cidades que têm empresas credenciadas, mas TODAS as empresas estão inativas (>365 dias sem voucher).")
-        
-        if not df_labs.empty and not df_empresas.empty:
-            # Normalizar cidades antes de comparar
-            df_labs_norm = normalize_city_column(df_labs.copy().reset_index(drop=True), 'cidade')
-            df_empresas_norm = normalize_city_column(df_empresas.copy().reset_index(drop=True), 'cidade')
-            
-            # Encontrar cidades onde TODAS as empresas são inativas
-            if 'cidade' in df_empresas_norm.columns and 'status' in df_empresas_norm.columns:
-                empresas_por_cidade = df_empresas_norm.groupby('cidade').agg({
-                    'status': lambda x: (x == 'Ativo').sum()
-                }).reset_index()
-                empresas_por_cidade.columns = ['cidade', 'empresas_ativas']
-                
-                # Cidades com empresas, mas nenhuma ativa
-                cidades_empresas_inativas = set(empresas_por_cidade[empresas_por_cidade['empresas_ativas'] == 0]['cidade'])
-                cidades_empresas_inativas = {c for c in cidades_empresas_inativas if c != ''}  # Remover strings vazias
-                
-                # PCLs nessas cidades
-                df_result_norm = df_labs_norm[df_labs_norm['cidade'].isin(cidades_empresas_inativas)] if 'cidade' in df_labs_norm.columns else pd.DataFrame()
-                # Usar o dataframe original para manter os dados originais
-                if not df_result_norm.empty:
-                    df_result = df_labs.iloc[df_result_norm.index].copy()
-                else:
-                    df_result = pd.DataFrame()
-                
-                if not df_result.empty:
-                    st.warning(f"⚠️ Encontrados {len(df_result)} PCLs em cidades onde todas as empresas estão inativas")
-
-                    cols = ['cnpj', 'razao_social', 'nome_fantasia', 'cidade', 'uf', 'transportadora', 'frequencia', 'status', 'acumulado_coletas', 'data_ultima_coleta']
-                    cols_available = [c for c in cols if c in df_result.columns]
-
-                    # Fallback: usar todas as colunas se nenhuma das esperadas existir
-                    if not cols_available:
-                        cols_available = df_result.columns.tolist()
-
-                    df_display = df_result[cols_available].copy()
-
-                    # Adicionar quantidade de empresas inativas na cidade
-                    # Criar mapeamento de cidade normalizada para original
-                    cidade_map_norm_to_orig = dict(zip(df_empresas_norm['cidade'], df_empresas['cidade']))
-                    # Mapear cidades normalizadas de volta para originais
-                    cidades_originais = {cidade_map_norm_to_orig.get(c, c) for c in cidades_empresas_inativas if c in cidade_map_norm_to_orig}
-                    emp_count = df_empresas[df_empresas['cidade'].isin(cidades_originais)].groupby('cidade').size().to_dict()
-                    df_display['empresas_inativas_cidade'] = df_display['cidade'].map(emp_count).fillna(0).astype(int)
-
-                    rename_map = {'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'nome_fantasia': 'Nome Fantasia',
-                                  'cidade': 'Cidade', 'uf': 'UF', 'transportadora': 'Transportadora', 'frequencia': 'Frequência',
-                                  'status': 'Status PCL', 'acumulado_coletas': 'Coletas', 'data_ultima_coleta': 'Última Coleta',
-                                  'empresas_inativas_cidade': 'Empresas Inativas na Cidade'}
-                    df_display = df_display.rename(columns=rename_map)
-                    
-                    st.dataframe(df_display, use_container_width=True, hide_index=True, height=500)
-                    
-                    output = BytesIO()
-                    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                        df_display.to_excel(writer, index=False, sheet_name='PCLs Empresas Inativas')
-                    st.download_button("📥 Download Excel", output.getvalue(), 
-                                       f'pcls_empresas_inativas_{datetime.now().strftime("%Y%m%d")}.xlsx',
-                                       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-                else:
-                    st.success("✅ Não há PCLs em cidades onde todas as empresas estão inativas.")
-            else:
-                st.warning("Colunas necessárias não encontradas nos dados.")
-        else:
-            st.warning("Dados insuficientes para análise.")
-    
-    # Análise 3: Empresas sem PCL na cidade
-    elif analise_tipo == "3. Empresas em cidades SEM PCL credenciado":
-        st.markdown("**Descrição:** Lista de empresas em cidades que não têm nenhum PCL credenciado.")
-        
-        if not df_labs.empty and not df_empresas.empty:
-            # Normalizar cidades antes de comparar
-            df_labs_norm = normalize_city_column(df_labs.copy().reset_index(drop=True), 'cidade')
-            df_empresas_norm = normalize_city_column(df_empresas.copy().reset_index(drop=True), 'cidade')
-            
-            cidades_com_pcl = set(df_labs_norm['cidade'].dropna().unique()) if 'cidade' in df_labs_norm.columns else set()
-            cidades_com_pcl = {c for c in cidades_com_pcl if c != ''}  # Remover strings vazias
-            
-            df_result_norm = df_empresas_norm[~df_empresas_norm['cidade'].isin(cidades_com_pcl)] if 'cidade' in df_empresas_norm.columns else pd.DataFrame()
-            # Usar o dataframe original para manter os dados originais
-            if not df_result_norm.empty:
-                df_result = df_empresas.iloc[df_result_norm.index].copy()
-            else:
-                df_result = pd.DataFrame()
-            
-            if not df_result.empty:
-                st.error(f"❌ Encontradas {len(df_result)} empresas em cidades sem PCL credenciado")
-                
-                cols = ['cnpj', 'razao_social', 'nome_fantasia', 'cidade', 'uf', 'status', 'acumulado_vouchers', 'data_ultima_utilizacao']
-                cols_available = [c for c in cols if c in df_result.columns]
-                
-                # Fallback: usar todas as colunas se nenhuma das esperadas existir
-                if not cols_available:
-                    cols_available = df_result.columns.tolist()
-                
-                df_display = df_result[cols_available].copy()
-                
-                rename_map = {'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'nome_fantasia': 'Nome Fantasia',
-                              'cidade': 'Cidade', 'uf': 'UF', 'status': 'Status', 
-                              'acumulado_vouchers': 'Vouchers', 'data_ultima_utilizacao': 'Última Utilização'}
-                df_display = df_display.rename(columns=rename_map)
-                
-                st.dataframe(df_display, use_container_width=True, hide_index=True, height=500)
-                
-                output = BytesIO()
-                with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                    df_display.to_excel(writer, index=False, sheet_name='Empresas sem PCL')
-                st.download_button("📥 Download Excel", output.getvalue(), 
-                                   f'empresas_sem_pcl_{datetime.now().strftime("%Y%m%d")}.xlsx',
-                                   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-            else:
-                st.success("✅ Todas as empresas estão em cidades com PCL credenciado.")
-        else:
-            st.warning("Dados insuficientes para análise.")
-    
-    # Análise 4: Empresas em cidades COM PCL INATIVO
-    elif analise_tipo == "4. Empresas em cidades COM PCL INATIVO (90 dias)":
-        st.markdown("**Descrição:** Lista de empresas em cidades que têm PCL credenciado, mas TODOS os PCLs estão inativos (>90 dias sem coleta).")
-        
-        if not df_labs.empty and not df_empresas.empty:
-            # Normalizar cidades antes de comparar
-            df_labs_norm = normalize_city_column(df_labs.copy().reset_index(drop=True), 'cidade')
-            df_empresas_norm = normalize_city_column(df_empresas.copy().reset_index(drop=True), 'cidade')
-            
-            # Encontrar cidades onde TODOS os PCLs são inativos
-            if 'cidade' in df_labs_norm.columns and 'status' in df_labs_norm.columns:
-                pcls_por_cidade = df_labs_norm.groupby('cidade').agg({
-                    'status': lambda x: (x == 'Ativo').sum()
-                }).reset_index()
-                pcls_por_cidade.columns = ['cidade', 'pcls_ativos']
-                
-                # Cidades com PCLs, mas nenhum ativo
-                cidades_pcls_inativos = set(pcls_por_cidade[pcls_por_cidade['pcls_ativos'] == 0]['cidade'])
-                cidades_pcls_inativos = {c for c in cidades_pcls_inativos if c != ''}  # Remover strings vazias
-                
-                # Empresas nessas cidades
-                df_result_norm = df_empresas_norm[df_empresas_norm['cidade'].isin(cidades_pcls_inativos)] if 'cidade' in df_empresas_norm.columns else pd.DataFrame()
-                # Usar o dataframe original para manter os dados originais
-                if not df_result_norm.empty:
-                    df_result = df_empresas.iloc[df_result_norm.index].copy()
-                else:
-                    df_result = pd.DataFrame()
-                
-                if not df_result.empty:
-                    st.warning(f"⚠️ Encontradas {len(df_result)} empresas em cidades onde todos os PCLs estão inativos")
-                    
-                    cols = ['cnpj', 'razao_social', 'nome_fantasia', 'cidade', 'uf', 'status', 'acumulado_vouchers', 'data_ultima_utilizacao']
-                    cols_available = [c for c in cols if c in df_result.columns]
-                    
-                    # Fallback: usar todas as colunas se nenhuma das esperadas existir
-                    if not cols_available:
-                        cols_available = df_result.columns.tolist()
-                    
-                    df_display = df_result[cols_available].copy()
-                    
-                    # Adicionar quantidade de PCLs inativos na cidade
-                    # Criar mapeamento de cidade normalizada para original
-                    cidade_map_norm_to_orig = dict(zip(df_labs_norm['cidade'], df_labs['cidade']))
-                    # Mapear cidades normalizadas de volta para originais
-                    cidades_originais = {cidade_map_norm_to_orig.get(c, c) for c in cidades_pcls_inativos if c in cidade_map_norm_to_orig}
-                    pcl_count = df_labs[df_labs['cidade'].isin(cidades_originais)].groupby('cidade').size().to_dict()
-                    df_display['pcls_inativos_cidade'] = df_display['cidade'].map(pcl_count).fillna(0).astype(int)
-                    
-                    rename_map = {'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'nome_fantasia': 'Nome Fantasia',
-                                  'cidade': 'Cidade', 'uf': 'UF', 'status': 'Status Empresa', 
-                                  'acumulado_vouchers': 'Vouchers', 'data_ultima_utilizacao': 'Última Utilização',
-                                  'pcls_inativos_cidade': 'PCLs Inativos na Cidade'}
-                    df_display = df_display.rename(columns=rename_map)
-                    
-                    st.dataframe(df_display, use_container_width=True, hide_index=True, height=500)
-                    
-                    output = BytesIO()
-                    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                        df_display.to_excel(writer, index=False, sheet_name='Empresas PCLs Inativos')
-                    st.download_button("📥 Download Excel", output.getvalue(), 
-                                       f'empresas_pcls_inativos_{datetime.now().strftime("%Y%m%d")}.xlsx',
-                                       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-                else:
-                    st.success("✅ Não há empresas em cidades onde todos os PCLs estão inativos.")
-            else:
-                st.warning("Colunas necessárias não encontradas nos dados.")
-        else:
-            st.warning("Dados insuficientes para análise.")
-    
-    # Top PCLs por volume
-    elif analise_tipo == "Top PCLs por volume de coletas":
-        if not df_labs.empty and 'acumulado_coletas' in df_labs.columns:
-            top_pcls = df_labs.nlargest(50, 'acumulado_coletas')
-            cols = ['cnpj', 'razao_social', 'representante', 'cidade', 'uf', 'transportadora', 'frequencia', 'acumulado_coletas', 'status']
-            cols_available = [c for c in cols if c in top_pcls.columns]
-            df_display = top_pcls[cols_available].copy()
-            rename_map = {'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'representante': 'Representante',
-                          'cidade': 'Cidade', 'uf': 'UF', 'transportadora': 'Transportadora', 'frequencia': 'Frequência',
-                          'acumulado_coletas': 'Total Coletas', 'status': 'Status'}
-            df_display = df_display.rename(columns=rename_map)
-            st.dataframe(df_display, use_container_width=True, hide_index=True, height=500)
-    
-    # Estados com menor cobertura
-    elif analise_tipo == "Estados com menor cobertura":
-        if not df_labs.empty and 'uf' in df_labs.columns:
-            cobertura = df_labs.groupby('uf').agg({
-                'cidade': 'nunique',
-                'acumulado_coletas': 'sum' if 'acumulado_coletas' in df_labs.columns else 'count'
-            }).reset_index()
-            cobertura.columns = ['UF', 'Cidades Atendidas', 'Total Coletas']
-            cobertura = cobertura.sort_values('Cidades Atendidas')
-            st.dataframe(cobertura, use_container_width=True, hide_index=True)
+    _analises_especificas_fragment()
 
 with tab_ajuda:
     create_section_header("❓", "Ajuda / FAQ", "Perguntas frequentes e orientações de uso")

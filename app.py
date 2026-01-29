@@ -1258,12 +1258,6 @@ def _limpar_filtro_visao_estado():
     st.session_state["estado_visao_uf"] = "Todos"
     st.toast("Filtros limpos!", icon="🔄")
 
-def _on_change_estado_visao():
-    """Callback quando estado é alterado na aba Por Estado"""
-    valor = st.session_state.get("estado_visao_uf", "Todos")
-    if valor != "Todos":
-        st.toast(f"Filtrado por: {valor}", icon="✅")
-
 @st.fragment
 def _visao_estado_fragment():
     """Conteúdo da aba Por Estado. Fragment para que ao mudar o selectbox apenas esta parte rerun, mantendo a aba ativa."""
@@ -1278,8 +1272,7 @@ def _visao_estado_fragment():
         estado_filtro = st.selectbox(
             "Selecione o Estado",
             ["Todos"] + estados_lista,
-            key="estado_visao_uf",
-            on_change=_on_change_estado_visao
+            key="estado_visao_uf"
         )
     with col_btn:
         st.markdown("<br>", unsafe_allow_html=True)
@@ -1454,6 +1447,447 @@ def _visao_estado_fragment():
     else:
         st.warning("Nenhum dado disponível para exibição.")
 
+# Callbacks para limpar filtros
+def _limpar_filtro_coletas():
+    st.session_state["filtro_estado_coletas"] = "Todos"
+    st.session_state["filtro_cidade_coletas"] = "Todas"
+    st.session_state["filtro_bairro_coletas"] = "Todos"
+    st.toast("Filtros limpos!", icon="🔄")
+
+def _limpar_filtro_pcls():
+    st.session_state["filtro_estado_pcl"] = "Todos"
+    st.session_state["filtro_cidade_pcl"] = "Todas"
+    st.session_state["filtro_bairro_pcl"] = "Todos"
+    st.toast("Filtros limpos!", icon="🔄")
+
+def _limpar_filtro_empresas():
+    st.session_state["filtro_estado_emp"] = "Todos"
+    st.session_state["filtro_cidade_emp"] = "Todas"
+    st.session_state["filtro_bairro_emp"] = "Todos"
+    st.toast("Filtros limpos!", icon="🔄")
+
+@st.fragment
+def _analise_coletas_fragment():
+    """Conteúdo da aba Coletas. Fragment para manter a aba ativa ao mudar filtros."""
+    create_section_header("🔬", "Análise de Coletas", "Métricas detalhadas de coletas por estado e PCL")
+
+    # Filtros
+    col_filtro1, col_filtro2, col_filtro3, col_filtro4 = st.columns([1, 1, 1, 1])
+
+    with col_filtro1:
+        estados_coletas_lista = ['Todos'] + listas_filtros['pcl']['estados']
+        estado_coletas_selecionado = st.selectbox("Estado", estados_coletas_lista, key="filtro_estado_coletas")
+
+    with col_filtro2:
+        if estado_coletas_selecionado != "Todos":
+            cidades_coletas_lista = ['Todas'] + listas_filtros['pcl']['cidades_por_estado'].get(estado_coletas_selecionado, [])
+        else:
+            cidades_coletas_lista = ['Todas'] + listas_filtros['pcl']['cidades']
+        cidade_coletas_selecionada = st.selectbox("Cidade", cidades_coletas_lista, key="filtro_cidade_coletas")
+
+    with col_filtro3:
+        df_temp_coletas = df_labs.copy()
+        if estado_coletas_selecionado != "Todos":
+            df_temp_coletas = df_temp_coletas[df_temp_coletas['uf'] == estado_coletas_selecionado]
+        if cidade_coletas_selecionada != "Todas":
+            df_temp_coletas = df_temp_coletas[df_temp_coletas['cidade'] == cidade_coletas_selecionada]
+        bairros_coletas_lista = ['Todos'] + sorted(df_temp_coletas['bairro'].dropna().unique().tolist()) if 'bairro' in df_temp_coletas.columns else ['Todos']
+        bairros_coletas_lista = [b for b in bairros_coletas_lista if b and str(b).strip()]
+        bairro_coletas_selecionado = st.selectbox("Bairro", bairros_coletas_lista, key="filtro_bairro_coletas")
+
+    with col_filtro4:
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.button("Limpar Filtros", key="limpar_coletas", on_click=_limpar_filtro_coletas)
+
+    # Aplicar filtros
+    df_labs_coletas = apply_filters(df_labs, estado_coletas_selecionado, cidade_coletas_selecionada)
+    if bairro_coletas_selecionado != "Todos" and 'bairro' in df_labs_coletas.columns:
+        df_labs_coletas = df_labs_coletas[df_labs_coletas['bairro'] == bairro_coletas_selecionado]
+
+    if df_labs_coletas.empty or 'acumulado_coletas' not in df_labs_coletas.columns:
+        st.warning("Dados de coletas não disponíveis para os filtros selecionados.")
+    else:
+        # Métricas de coletas
+        try:
+            total_coletas = float(df_labs_coletas['acumulado_coletas'].sum()) if pd.notna(df_labs_coletas['acumulado_coletas'].sum()) else 0.0
+            media_coletas = float(df_labs_coletas['acumulado_coletas'].mean()) if pd.notna(df_labs_coletas['acumulado_coletas'].mean()) else 0.0
+            mediana_coletas = float(df_labs_coletas['acumulado_coletas'].median()) if pd.notna(df_labs_coletas['acumulado_coletas'].median()) else 0.0
+            max_coletas = float(df_labs_coletas['acumulado_coletas'].max()) if pd.notna(df_labs_coletas['acumulado_coletas'].max()) else 0.0
+            pcls_sem_coleta = len(df_labs_coletas[df_labs_coletas['acumulado_coletas'].fillna(0) == 0])
+            pcls_com_coleta = len(df_labs_coletas[df_labs_coletas['acumulado_coletas'].fillna(0) > 0])
+        except:
+            total_coletas = 0.0
+            media_coletas = 0.0
+            mediana_coletas = 0.0
+            max_coletas = 0.0
+            pcls_sem_coleta = 0
+            pcls_com_coleta = 0
+
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            total_coletas_int = int(total_coletas) if pd.notna(total_coletas) and np.isfinite(total_coletas) else 0
+            create_metric_card("Total de Coletas", format_number(total_coletas_int), "Acumulado geral", "", "gray")
+        with col2:
+            media_int = int(media_coletas) if pd.notna(media_coletas) and np.isfinite(media_coletas) else 0
+            mediana_int = int(mediana_coletas) if pd.notna(mediana_coletas) and np.isfinite(mediana_coletas) else 0
+            create_metric_card("Média por PCL", format_number(media_int), f"Mediana: {mediana_int}", "", "gray")
+        with col3:
+            max_int = int(max_coletas) if pd.notna(max_coletas) and np.isfinite(max_coletas) else 0
+            create_metric_card("Máximo", format_number(max_int), "Maior volume", "", "gray")
+        with col4:
+            pct_com_coleta = (pcls_com_coleta / len(df_labs_coletas) * 100) if len(df_labs_coletas) > 0 else 0
+            create_metric_card("PCLs com Coleta", format_number(pcls_com_coleta), f"{pct_com_coleta:.1f}% do total", "", "gray")
+
+        st.markdown("---")
+
+        # Coletas por Estado
+        create_section_header("📊", "Coletas por Estado")
+
+        if 'uf' in df_labs_coletas.columns:
+            coletas_estado = df_labs_coletas.groupby('uf').agg({
+                'acumulado_coletas': ['sum', 'mean', 'count']
+            }).reset_index()
+            coletas_estado.columns = ['UF', 'Total Coletas', 'Média por PCL', 'Qtd PCLs']
+            coletas_estado = coletas_estado.sort_values('Total Coletas', ascending=False)
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                # Gráfico de Total de Coletas por Estado
+                df_chart = coletas_estado[['UF', 'Total Coletas']].head(12)
+                df_chart = df_chart.sort_values('Total Coletas', ascending=True)
+
+                fig = go.Figure()
+                valores_x = [float(x) if pd.notna(x) and np.isfinite(x) else 0.0 for x in df_chart['Total Coletas']]
+                valores_y = [str(y) if pd.notna(y) else "" for y in df_chart['UF']]
+                fig.add_trace(go.Bar(
+                    x=valores_x,
+                    y=valores_y,
+                    orientation='h',
+                    marker=dict(color='#22C55E'),
+                    text=[format_number(int(x)) for x in valores_x],
+                    textposition='outside'
+                ))
+
+                fig.update_layout(
+                    title=dict(text="Total de Coletas por Estado (Top 12)", font=dict(size=15), x=0.5),
+                    xaxis=dict(title="", showgrid=True, gridcolor='rgba(128,128,128,0.2)'),
+                    yaxis=dict(title=""),
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    height=450,
+                    margin=dict(l=10, r=70, t=50, b=20)
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
+            with col2:
+                # Gráfico de Média de Coletas por Estado
+                df_chart = coletas_estado[['UF', 'Média por PCL']].head(12)
+                df_chart = df_chart.sort_values('Média por PCL', ascending=True)
+
+                fig = go.Figure()
+                valores_x = [float(x) if pd.notna(x) and np.isfinite(x) else 0.0 for x in df_chart['Média por PCL']]
+                valores_y = [str(y) if pd.notna(y) else "" for y in df_chart['UF']]
+                fig.add_trace(go.Bar(
+                    x=valores_x,
+                    y=valores_y,
+                    orientation='h',
+                    marker=dict(color='#3B82F6'),
+                    text=[f"{x:.1f}" for x in valores_x],
+                    textposition='outside'
+                ))
+
+                fig.update_layout(
+                    title=dict(text="Média de Coletas por PCL (Top 12)", font=dict(size=15), x=0.5),
+                    xaxis=dict(title="", showgrid=True, gridcolor='rgba(128,128,128,0.2)'),
+                    yaxis=dict(title=""),
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    height=450,
+                    margin=dict(l=10, r=70, t=50, b=20)
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
+            st.markdown("---")
+
+            # Tabela detalhada
+            create_section_header("📋", "Tabela Detalhada por Estado")
+
+            coletas_estado['Total Coletas'] = coletas_estado['Total Coletas'].fillna(0).astype(int)
+            coletas_estado['Média por PCL'] = coletas_estado['Média por PCL'].fillna(0).round(1)
+            coletas_estado['Qtd PCLs'] = coletas_estado['Qtd PCLs'].fillna(0).astype(int)
+
+            st.dataframe(
+                coletas_estado,
+                use_container_width=True,
+                hide_index=True,
+                height=400
+            )
+
+            st.markdown("---")
+
+            # Top PCLs por coletas
+            create_section_header("🏆", "Top 20 PCLs por Volume de Coletas")
+
+            cols_display = ['razao_social', 'representante', 'cidade', 'uf', 'acumulado_coletas', 'status']
+            cols_available = [c for c in cols_display if c in df_labs_coletas.columns]
+
+            if cols_available:
+                top_pcls = df_labs_coletas.nlargest(20, 'acumulado_coletas')[cols_available]
+                rename_map = {
+                    'razao_social': 'Razão Social',
+                    'representante': 'Representante',
+                    'cidade': 'Cidade',
+                    'uf': 'UF',
+                    'acumulado_coletas': 'Total Coletas',
+                    'status': 'Status'
+                }
+                top_pcls = top_pcls.rename(columns=rename_map)
+
+                st.dataframe(
+                    top_pcls,
+                    use_container_width=True,
+                    hide_index=True,
+                    height=500
+                )
+
+@st.fragment
+def _listagem_pcls_fragment():
+    """Conteúdo da aba PCLs. Fragment para manter a aba ativa ao mudar filtros."""
+    create_section_header("🏥", "Listagem de PCLs", "Base completa de laboratórios credenciados")
+
+    # Filtros dentro da aba (usando listas cacheadas)
+    col_filtro1, col_filtro2, col_filtro3, col_filtro4 = st.columns([1, 1, 1, 1])
+
+    with col_filtro1:
+        estados_pcl_lista = ['Todos'] + listas_filtros['pcl']['estados']
+        estado_pcl_selecionado = st.selectbox("Estado", estados_pcl_lista, key="filtro_estado_pcl")
+
+    with col_filtro2:
+        if estado_pcl_selecionado != "Todos":
+            cidades_pcl_lista = ['Todas'] + listas_filtros['pcl']['cidades_por_estado'].get(estado_pcl_selecionado, [])
+        else:
+            cidades_pcl_lista = ['Todas'] + listas_filtros['pcl']['cidades']
+        cidade_pcl_selecionada = st.selectbox("Cidade", cidades_pcl_lista, key="filtro_cidade_pcl")
+
+    with col_filtro3:
+        # Filtrar bairros baseado na cidade/estado selecionado
+        df_temp_pcl = df_labs.copy()
+        if estado_pcl_selecionado != "Todos":
+            df_temp_pcl = df_temp_pcl[df_temp_pcl['uf'] == estado_pcl_selecionado]
+        if cidade_pcl_selecionada != "Todas":
+            df_temp_pcl = df_temp_pcl[df_temp_pcl['cidade'] == cidade_pcl_selecionada]
+        bairros_pcl_lista = ['Todos'] + sorted(df_temp_pcl['bairro'].dropna().unique().tolist()) if 'bairro' in df_temp_pcl.columns else ['Todos']
+        bairros_pcl_lista = [b for b in bairros_pcl_lista if b and str(b).strip()]  # Remover vazios
+        bairro_pcl_selecionado = st.selectbox("Bairro", bairros_pcl_lista, key="filtro_bairro_pcl")
+
+    with col_filtro4:
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.button("Limpar Filtros", key="limpar_pcls", on_click=_limpar_filtro_pcls)
+
+    # Aplicar filtros
+    df_labs_filtered = apply_filters(df_labs, estado_pcl_selecionado, cidade_pcl_selecionada)
+    if bairro_pcl_selecionado != "Todos" and 'bairro' in df_labs_filtered.columns:
+        df_labs_filtered = df_labs_filtered[df_labs_filtered['bairro'] == bairro_pcl_selecionado]
+
+    if df_labs_filtered.empty:
+        st.warning("Nenhum PCL encontrado com os filtros selecionados.")
+    else:
+        # Métricas rápidas
+        col1, col2, col3, col4 = st.columns(4)
+
+        total = len(df_labs_filtered)
+        ativos = len(df_labs_filtered[df_labs_filtered['status'] == 'Ativo']) if 'status' in df_labs_filtered.columns else 0
+
+        with col1:
+            create_metric_card("Total Filtrado", format_number(total), "", "", "gray")
+        with col2:
+            create_metric_card("Ativos", format_number(ativos), f"{(ativos/total*100):.1f}%" if total > 0 else "0%", "", "gray")
+        with col3:
+            create_metric_card("Inativos", format_number(total - ativos), "", "", "gray")
+        with col4:
+            coletas = df_labs_filtered['acumulado_coletas'].sum() if 'acumulado_coletas' in df_labs_filtered.columns else 0
+            create_metric_card("Total Coletas", format_number(int(coletas)), "", "", "gray")
+
+        st.markdown("---")
+
+        # Usar dados pré-calculados (cacheados) em vez de recalcular
+        df_display = df_labs_filtered.copy()
+
+        # Adicionar contagens usando dicionários cacheados
+        if 'cidade' in df_display.columns:
+            df_display['qtd_empresas_cidade'] = df_display['cidade'].map(empresas_por_cidade).fillna(0).astype(int)
+            df_display['qtd_empresas_ativas_cidade'] = df_display['cidade'].map(empresas_ativas_cidade).fillna(0).astype(int)
+            df_display['qtd_empresas_inativas_cidade'] = df_display['qtd_empresas_cidade'] - df_display['qtd_empresas_ativas_cidade']
+            df_display['qtd_empresas_usaram_voucher'] = df_display['cidade'].map(empresas_com_voucher).fillna(0).astype(int)
+
+        # Preparar DataFrame para exibição
+        colunas_pcl = [
+            'cnpj', 'razao_social', 'nome_fantasia', 'endereco_logradouro', 'bairro', 'cidade', 'uf', 'cep',
+            'data_credenciamento', 'representante',
+            'transportadora', 'frequencia',
+            'acumulado_coletas', 'acumulado_coletas_ano', 'data_ultima_coleta', 'status',
+            'qtd_empresas_cidade'
+        ]
+
+        rename_map_pcl = {
+            'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'nome_fantasia': 'Nome Fantasia',
+            'endereco_logradouro': 'Endereço', 'bairro': 'Bairro',
+            'cidade': 'Cidade', 'uf': 'UF', 'cep': 'CEP',
+            'data_credenciamento': 'Data Credenciamento', 'representante': 'Representante',
+            'transportadora': 'Transportadora', 'frequencia': 'Frequência',
+            'acumulado_coletas': 'Coletas Total', 'acumulado_coletas_ano': 'Coletas 2025',
+            'data_ultima_coleta': 'Última Coleta', 'status': 'Status',
+            'qtd_empresas_cidade': 'Empresas na Cidade'
+        }
+
+        df_final = prepare_display_dataframe(df_display, colunas_pcl, rename_map_pcl)
+
+        if not df_final.empty:
+            st.dataframe(df_final, use_container_width=True, hide_index=True, height=500)
+        else:
+            st.warning("Nenhum dado disponível para exibição.")
+
+        # Download
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df_display.to_excel(writer, index=False, sheet_name='PCLs')
+
+        st.download_button(
+            label="📥 Download Excel",
+            data=output.getvalue(),
+            file_name=f'pcls_{datetime.now().strftime("%Y%m%d")}.xlsx',
+            mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+
+@st.fragment
+def _listagem_empresas_fragment():
+    """Conteúdo da aba Empresas. Fragment para manter a aba ativa ao mudar filtros."""
+    create_section_header("🏢", "Listagem de Empresas", "Base completa de empresas credenciadas")
+
+    # Filtros dentro da aba
+    col_filtro1, col_filtro2, col_filtro3, col_filtro4 = st.columns([1, 1, 1, 1])
+
+    with col_filtro1:
+        estados_emp_lista = ['Todos'] + listas_filtros['empresa']['estados']
+        estado_emp_selecionado = st.selectbox("Estado", estados_emp_lista, key="filtro_estado_emp")
+
+    with col_filtro2:
+        if estado_emp_selecionado != "Todos":
+            cidades_emp_lista = ['Todas'] + listas_filtros['empresa']['cidades_por_estado'].get(estado_emp_selecionado, [])
+        else:
+            cidades_emp_lista = ['Todas'] + listas_filtros['empresa']['cidades']
+        cidade_emp_selecionada = st.selectbox("Cidade", cidades_emp_lista, key="filtro_cidade_emp")
+
+    with col_filtro3:
+        # Filtrar bairros baseado na cidade/estado selecionado
+        df_temp = df_empresas.copy()
+        if estado_emp_selecionado != "Todos":
+            df_temp = df_temp[df_temp['uf'] == estado_emp_selecionado]
+        if cidade_emp_selecionada != "Todas":
+            df_temp = df_temp[df_temp['cidade'] == cidade_emp_selecionada]
+        bairros_lista = ['Todos'] + sorted(df_temp['bairro'].dropna().unique().tolist()) if 'bairro' in df_temp.columns else ['Todos']
+        bairros_lista = [b for b in bairros_lista if b and b.strip()]  # Remover vazios
+        bairro_emp_selecionado = st.selectbox("Bairro", bairros_lista, key="filtro_bairro_emp")
+
+    with col_filtro4:
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.button("Limpar Filtros", key="limpar_empresas", on_click=_limpar_filtro_empresas)
+
+    # Aplicar filtros
+    df_empresas_filtered = apply_filters(df_empresas, estado_emp_selecionado, cidade_emp_selecionada)
+    if bairro_emp_selecionado != "Todos" and 'bairro' in df_empresas_filtered.columns:
+        df_empresas_filtered = df_empresas_filtered[df_empresas_filtered['bairro'] == bairro_emp_selecionado]
+
+    if df_empresas_filtered.empty:
+        st.warning("Nenhuma empresa encontrada com os filtros selecionados.")
+    else:
+        # Métricas rápidas
+        col1, col2, col3, col4 = st.columns(4)
+
+        total = len(df_empresas_filtered)
+        ativas = len(df_empresas_filtered[df_empresas_filtered['status'] == 'Ativo']) if 'status' in df_empresas_filtered.columns else 0
+
+        with col1:
+            create_metric_card("Total Filtrado", format_number(total), "", "", "gray")
+        with col2:
+            create_metric_card("Ativas", format_number(ativas), f"{(ativas/total*100):.1f}%" if total > 0 else "0%", "", "gray")
+        with col3:
+            create_metric_card("Inativas", format_number(total - ativas), "", "", "gray")
+        with col4:
+            if 'acumulado_vouchers' in df_empresas_filtered.columns:
+                vouchers = float(df_empresas_filtered['acumulado_vouchers'].fillna(0).sum())
+            else:
+                vouchers = 0
+            create_metric_card("Total Vouchers", format_number(int(vouchers)), "", "", "gray")
+
+        st.markdown("---")
+
+        # Usar dados pré-calculados (cacheados) em vez de recalcular
+        df_display = df_empresas_filtered.copy()
+
+        # Adicionar contagens usando dicionários cacheados
+        if 'cidade' in df_display.columns:
+            df_display['qtd_pcls_cidade'] = df_display['cidade'].map(pcls_por_cidade).fillna(0).astype(int)
+            df_display['pcl_na_cidade'] = df_display['qtd_pcls_cidade'].apply(lambda x: 'Sim' if x > 0 else 'Não')
+            df_display['qtd_pcls_ativos_cidade'] = df_display['cidade'].map(pcls_ativos_cidade).fillna(0).astype(int)
+            df_display['qtd_pcls_inativos_cidade'] = df_display['qtd_pcls_cidade'] - df_display['qtd_pcls_ativos_cidade']
+
+        # Garantir que colunas existam para exibição
+        if 'acumulado_vouchers' not in df_display.columns:
+            df_display['acumulado_vouchers'] = 0
+        if 'acumulado_coletas_nao_voucher' not in df_display.columns:
+            df_display['acumulado_coletas_nao_voucher'] = 0
+        if 'acumulado_coletas_total' not in df_display.columns:
+            df_display['acumulado_coletas_total'] = df_display['acumulado_vouchers'] + df_display['acumulado_coletas_nao_voucher']
+        if 'coletas_2025' not in df_display.columns:
+            df_display['coletas_2025'] = 0
+
+        # Formatar valores para exibição
+        for col in ['acumulado_vouchers', 'acumulado_coletas_nao_voucher', 'acumulado_coletas_total', 'coletas_2025']:
+            if col in df_display.columns:
+                df_display[col] = pd.to_numeric(df_display[col], errors='coerce').fillna(0).astype(int)
+
+        # Preparar DataFrame para exibição
+        colunas_empresa = [
+            'cnpj', 'razao_social', 'endereco_logradouro', 'bairro', 'cidade', 'uf', 'cep',
+            'data_credenciamento', 'representante',
+            'acumulado_coletas_total', 'acumulado_vouchers', 'acumulado_coletas_nao_voucher',
+            'coletas_2025', 'ultima_coleta', 'status',
+            'qtd_pcls_cidade'
+        ]
+
+        rename_map_empresa = {
+            'cnpj': 'CNPJ', 'razao_social': 'Razão Social',
+            'endereco_logradouro': 'Endereço', 'bairro': 'Bairro',
+            'cidade': 'Cidade', 'uf': 'UF', 'cep': 'CEP',
+            'data_credenciamento': 'Data Credenciamento', 'representante': 'Representante',
+            'acumulado_coletas_total': 'Total Coletas', 'acumulado_vouchers': 'Coletas Voucher',
+            'acumulado_coletas_nao_voucher': 'Coletas Não-Voucher', 'coletas_2025': 'Coletas 2025',
+            'ultima_coleta': 'Última Coleta', 'status': 'Status',
+            'qtd_pcls_cidade': 'PCLs na Cidade'
+        }
+
+        df_final = prepare_display_dataframe(df_display, colunas_empresa, rename_map_empresa)
+
+        if not df_final.empty:
+            st.dataframe(df_final, use_container_width=True, hide_index=True, height=500)
+        else:
+            st.warning("Nenhum dado disponível para exibição.")
+
+        # Download
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df_display.to_excel(writer, index=False, sheet_name='Empresas')
+
+        st.download_button(
+            label="📥 Download Excel",
+            data=output.getvalue(),
+            file_name=f'empresas_{datetime.now().strftime("%Y%m%d")}.xlsx',
+            mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+
 # Abas de navegação (visual original). A aba "Por Estado" usa fragment para manter a aba ativa ao mudar o selectbox.
 tab_visao_geral, tab_visao_estado, tab_analise_coletas, tab_listagem_pcls, tab_listagem_empresas, tab_analises_especificas, tab_ajuda = st.tabs([
     "📈 Visão Geral",
@@ -1609,431 +2043,13 @@ with tab_visao_estado:
     _visao_estado_fragment()
 
 with tab_analise_coletas:
-    create_section_header("🔬", "Análise de Coletas", "Métricas detalhadas de coletas por estado e PCL")
-    
-    if df_labs.empty or 'acumulado_coletas' not in df_labs.columns:
-        st.warning("Dados de coletas não disponíveis.")
-    else:
-        # Métricas de coletas
-        try:
-            total_coletas = float(df_labs['acumulado_coletas'].sum()) if pd.notna(df_labs['acumulado_coletas'].sum()) else 0.0
-            media_coletas = float(df_labs['acumulado_coletas'].mean()) if pd.notna(df_labs['acumulado_coletas'].mean()) else 0.0
-            mediana_coletas = float(df_labs['acumulado_coletas'].median()) if pd.notna(df_labs['acumulado_coletas'].median()) else 0.0
-            max_coletas = float(df_labs['acumulado_coletas'].max()) if pd.notna(df_labs['acumulado_coletas'].max()) else 0.0
-            pcls_sem_coleta = len(df_labs[df_labs['acumulado_coletas'].fillna(0) == 0])
-            pcls_com_coleta = len(df_labs[df_labs['acumulado_coletas'].fillna(0) > 0])
-        except:
-            total_coletas = 0.0
-            media_coletas = 0.0
-            mediana_coletas = 0.0
-            max_coletas = 0.0
-            pcls_sem_coleta = 0
-            pcls_com_coleta = 0
-        
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            total_coletas_int = int(total_coletas) if pd.notna(total_coletas) and np.isfinite(total_coletas) else 0
-            create_metric_card("Total de Coletas", format_number(total_coletas_int), "Acumulado geral", "", "gray")
-        with col2:
-            media_int = int(media_coletas) if pd.notna(media_coletas) and np.isfinite(media_coletas) else 0
-            mediana_int = int(mediana_coletas) if pd.notna(mediana_coletas) and np.isfinite(mediana_coletas) else 0
-            create_metric_card("Média por PCL", format_number(media_int), f"Mediana: {mediana_int}", "", "gray")
-        with col3:
-            max_int = int(max_coletas) if pd.notna(max_coletas) and np.isfinite(max_coletas) else 0
-            create_metric_card("Máximo", format_number(max_int), "Maior volume", "", "gray")
-        with col4:
-            pct_com_coleta = (pcls_com_coleta / len(df_labs) * 100) if len(df_labs) > 0 else 0
-            create_metric_card("PCLs com Coleta", format_number(pcls_com_coleta), f"{pct_com_coleta:.1f}% do total", "", "gray")
-        
-        st.markdown("---")
-        
-        # Coletas por Estado
-        create_section_header("📊", "Coletas por Estado")
-        
-        if 'uf' in df_labs.columns:
-            coletas_estado = df_labs.groupby('uf').agg({
-                'acumulado_coletas': ['sum', 'mean', 'count']
-            }).reset_index()
-            coletas_estado.columns = ['UF', 'Total Coletas', 'Média por PCL', 'Qtd PCLs']
-            coletas_estado = coletas_estado.sort_values('Total Coletas', ascending=False)
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                # Gráfico de Total de Coletas por Estado
-                df_chart = coletas_estado[['UF', 'Total Coletas']].head(12)
-                df_chart = df_chart.sort_values('Total Coletas', ascending=True)
-
-                fig = go.Figure()
-                valores_x = [float(x) if pd.notna(x) and np.isfinite(x) else 0.0 for x in df_chart['Total Coletas']]
-                valores_y = [str(y) if pd.notna(y) else "" for y in df_chart['UF']]
-                fig.add_trace(go.Bar(
-                    x=valores_x,
-                    y=valores_y,
-                    orientation='h',
-                    marker=dict(color='#22C55E'),
-                    text=[format_number(int(x)) for x in valores_x],
-                    textposition='outside'
-                ))
-
-                fig.update_layout(
-                    title=dict(text="Total de Coletas por Estado (Top 12)", font=dict(size=15), x=0.5),
-                    xaxis=dict(title="", showgrid=True, gridcolor='rgba(128,128,128,0.2)'),
-                    yaxis=dict(title=""),
-                    plot_bgcolor='rgba(0,0,0,0)',
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    height=450,
-                    margin=dict(l=10, r=70, t=50, b=20)
-                )
-                st.plotly_chart(fig, use_container_width=True)
-
-            with col2:
-                # Gráfico de Média de Coletas por Estado
-                df_chart = coletas_estado[['UF', 'Média por PCL']].head(12)
-                df_chart = df_chart.sort_values('Média por PCL', ascending=True)
-
-                fig = go.Figure()
-                valores_x = [float(x) if pd.notna(x) and np.isfinite(x) else 0.0 for x in df_chart['Média por PCL']]
-                valores_y = [str(y) if pd.notna(y) else "" for y in df_chart['UF']]
-                fig.add_trace(go.Bar(
-                    x=valores_x,
-                    y=valores_y,
-                    orientation='h',
-                    marker=dict(color='#3B82F6'),
-                    text=[f"{x:.1f}" for x in valores_x],
-                    textposition='outside'
-                ))
-
-                fig.update_layout(
-                    title=dict(text="Média de Coletas por PCL (Top 12)", font=dict(size=15), x=0.5),
-                    xaxis=dict(title="", showgrid=True, gridcolor='rgba(128,128,128,0.2)'),
-                    yaxis=dict(title=""),
-                    plot_bgcolor='rgba(0,0,0,0)',
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    height=450,
-                    margin=dict(l=10, r=70, t=50, b=20)
-                )
-                st.plotly_chart(fig, use_container_width=True)
-            
-            st.markdown("---")
-            
-            # Tabela detalhada
-            create_section_header("📋", "Tabela Detalhada por Estado")
-            
-            coletas_estado['Total Coletas'] = coletas_estado['Total Coletas'].fillna(0).astype(int)
-            coletas_estado['Média por PCL'] = coletas_estado['Média por PCL'].fillna(0).round(1)
-            coletas_estado['Qtd PCLs'] = coletas_estado['Qtd PCLs'].fillna(0).astype(int)
-            
-            st.dataframe(
-                coletas_estado,
-                use_container_width=True,
-                hide_index=True,
-                height=400
-            )
-            
-            st.markdown("---")
-            
-            # Top PCLs por coletas
-            create_section_header("🏆", "Top 20 PCLs por Volume de Coletas")
-
-            cols_display = ['razao_social', 'representante', 'cidade', 'uf', 'acumulado_coletas', 'status']
-            cols_available = [c for c in cols_display if c in df_labs.columns]
-
-            if cols_available:
-                top_pcls = df_labs.nlargest(20, 'acumulado_coletas')[cols_available]
-                rename_map = {
-                    'razao_social': 'Razão Social',
-                    'representante': 'Representante',
-                    'cidade': 'Cidade',
-                    'uf': 'UF',
-                    'acumulado_coletas': 'Total Coletas',
-                    'status': 'Status'
-                }
-                top_pcls = top_pcls.rename(columns=rename_map)
-                
-                st.dataframe(
-                    top_pcls,
-                    use_container_width=True,
-                    hide_index=True,
-                    height=500
-                )
+    _analise_coletas_fragment()
 
 with tab_listagem_pcls:
-    create_section_header("🏥", "Listagem de PCLs", "Base completa de laboratórios credenciados")
-
-    # Callbacks para feedback visual
-    def _on_change_estado_pcl():
-        valor = st.session_state.get("filtro_estado_pcl", "Todos")
-        if valor != "Todos":
-            st.toast(f"Estado: {valor}", icon="✅")
-
-    def _on_change_cidade_pcl():
-        valor = st.session_state.get("filtro_cidade_pcl", "Todas")
-        if valor != "Todas":
-            st.toast(f"Cidade: {valor}", icon="✅")
-
-    def _on_change_bairro_pcl():
-        valor = st.session_state.get("filtro_bairro_pcl", "Todos")
-        if valor != "Todos":
-            st.toast(f"Bairro: {valor}", icon="✅")
-
-    def _limpar_filtro_pcls():
-        st.session_state["filtro_estado_pcl"] = "Todos"
-        st.session_state["filtro_cidade_pcl"] = "Todas"
-        st.session_state["filtro_bairro_pcl"] = "Todos"
-        st.toast("Filtros limpos!", icon="🔄")
-
-    # Filtros dentro da aba (usando listas cacheadas)
-    col_filtro1, col_filtro2, col_filtro3, col_filtro4 = st.columns([1, 1, 1, 1])
-
-    with col_filtro1:
-        estados_pcl_lista = ['Todos'] + listas_filtros['pcl']['estados']
-        estado_pcl_selecionado = st.selectbox("Estado", estados_pcl_lista, key="filtro_estado_pcl", on_change=_on_change_estado_pcl)
-
-    with col_filtro2:
-        if estado_pcl_selecionado != "Todos":
-            cidades_pcl_lista = ['Todas'] + listas_filtros['pcl']['cidades_por_estado'].get(estado_pcl_selecionado, [])
-        else:
-            cidades_pcl_lista = ['Todas'] + listas_filtros['pcl']['cidades']
-        cidade_pcl_selecionada = st.selectbox("Cidade", cidades_pcl_lista, key="filtro_cidade_pcl", on_change=_on_change_cidade_pcl)
-
-    with col_filtro3:
-        # Filtrar bairros baseado na cidade/estado selecionado
-        df_temp_pcl = df_labs.copy()
-        if estado_pcl_selecionado != "Todos":
-            df_temp_pcl = df_temp_pcl[df_temp_pcl['uf'] == estado_pcl_selecionado]
-        if cidade_pcl_selecionada != "Todas":
-            df_temp_pcl = df_temp_pcl[df_temp_pcl['cidade'] == cidade_pcl_selecionada]
-        bairros_pcl_lista = ['Todos'] + sorted(df_temp_pcl['bairro'].dropna().unique().tolist()) if 'bairro' in df_temp_pcl.columns else ['Todos']
-        bairros_pcl_lista = [b for b in bairros_pcl_lista if b and str(b).strip()]  # Remover vazios
-        bairro_pcl_selecionado = st.selectbox("Bairro", bairros_pcl_lista, key="filtro_bairro_pcl", on_change=_on_change_bairro_pcl)
-
-    with col_filtro4:
-        st.markdown("<br>", unsafe_allow_html=True)
-        st.button("Limpar Filtros", key="limpar_pcls", on_click=_limpar_filtro_pcls)
-
-    # Aplicar filtros
-    df_labs_filtered = apply_filters(df_labs, estado_pcl_selecionado, cidade_pcl_selecionada)
-    if bairro_pcl_selecionado != "Todos" and 'bairro' in df_labs_filtered.columns:
-        df_labs_filtered = df_labs_filtered[df_labs_filtered['bairro'] == bairro_pcl_selecionado]
-
-    if df_labs_filtered.empty:
-        st.warning("Nenhum PCL encontrado com os filtros selecionados.")
-    else:
-        # Métricas rápidas
-        col1, col2, col3, col4 = st.columns(4)
-
-        total = len(df_labs_filtered)
-        ativos = len(df_labs_filtered[df_labs_filtered['status'] == 'Ativo']) if 'status' in df_labs_filtered.columns else 0
-
-        with col1:
-            create_metric_card("Total Filtrado", format_number(total), "", "", "gray")
-        with col2:
-            create_metric_card("Ativos", format_number(ativos), f"{(ativos/total*100):.1f}%" if total > 0 else "0%", "", "gray")
-        with col3:
-            create_metric_card("Inativos", format_number(total - ativos), "", "", "gray")
-        with col4:
-            coletas = df_labs_filtered['acumulado_coletas'].sum() if 'acumulado_coletas' in df_labs_filtered.columns else 0
-            create_metric_card("Total Coletas", format_number(int(coletas)), "", "", "gray")
-
-        st.markdown("---")
-
-        # Usar dados pré-calculados (cacheados) em vez de recalcular
-        df_display = df_labs_filtered.copy()
-
-        # Adicionar contagens usando dicionários cacheados
-        if 'cidade' in df_display.columns:
-            df_display['qtd_empresas_cidade'] = df_display['cidade'].map(empresas_por_cidade).fillna(0).astype(int)
-            df_display['qtd_empresas_ativas_cidade'] = df_display['cidade'].map(empresas_ativas_cidade).fillna(0).astype(int)
-            df_display['qtd_empresas_inativas_cidade'] = df_display['qtd_empresas_cidade'] - df_display['qtd_empresas_ativas_cidade']
-            df_display['qtd_empresas_usaram_voucher'] = df_display['cidade'].map(empresas_com_voucher).fillna(0).astype(int)
-        
-        # Preparar DataFrame para exibição
-        colunas_pcl = [
-            'cnpj', 'razao_social', 'nome_fantasia', 'endereco_logradouro', 'bairro', 'cidade', 'uf', 'cep',
-            'data_credenciamento', 'representante',
-            'transportadora', 'frequencia',
-            'acumulado_coletas', 'acumulado_coletas_ano', 'data_ultima_coleta', 'status',
-            'qtd_empresas_cidade'
-        ]
-
-        rename_map_pcl = {
-            'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'nome_fantasia': 'Nome Fantasia',
-            'endereco_logradouro': 'Endereço', 'bairro': 'Bairro',
-            'cidade': 'Cidade', 'uf': 'UF', 'cep': 'CEP',
-            'data_credenciamento': 'Data Credenciamento', 'representante': 'Representante',
-            'transportadora': 'Transportadora', 'frequencia': 'Frequência',
-            'acumulado_coletas': 'Coletas Total', 'acumulado_coletas_ano': 'Coletas 2025',
-            'data_ultima_coleta': 'Última Coleta', 'status': 'Status',
-            'qtd_empresas_cidade': 'Empresas na Cidade'
-        }
-        
-        df_final = prepare_display_dataframe(df_display, colunas_pcl, rename_map_pcl)
-        
-        if not df_final.empty:
-            st.dataframe(df_final, use_container_width=True, hide_index=True, height=500)
-        else:
-            st.warning("Nenhum dado disponível para exibição.")
-        
-        # Download
-        output = BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df_display.to_excel(writer, index=False, sheet_name='PCLs')
-        
-        st.download_button(
-            label="📥 Download Excel",
-            data=output.getvalue(),
-            file_name=f'pcls_{datetime.now().strftime("%Y%m%d")}.xlsx',
-            mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        )
+    _listagem_pcls_fragment()
 
 with tab_listagem_empresas:
-    create_section_header("🏢", "Listagem de Empresas", "Base completa de empresas credenciadas")
-
-    # Callbacks para feedback visual
-    def _on_change_estado_emp():
-        valor = st.session_state.get("filtro_estado_emp", "Todos")
-        if valor != "Todos":
-            st.toast(f"Estado: {valor}", icon="✅")
-
-    def _on_change_cidade_emp():
-        valor = st.session_state.get("filtro_cidade_emp", "Todas")
-        if valor != "Todas":
-            st.toast(f"Cidade: {valor}", icon="✅")
-
-    def _on_change_bairro_emp():
-        valor = st.session_state.get("filtro_bairro_emp", "Todos")
-        if valor != "Todos":
-            st.toast(f"Bairro: {valor}", icon="✅")
-
-    def _limpar_filtro_empresas():
-        st.session_state["filtro_estado_emp"] = "Todos"
-        st.session_state["filtro_cidade_emp"] = "Todas"
-        st.session_state["filtro_bairro_emp"] = "Todos"
-        st.toast("Filtros limpos!", icon="🔄")
-
-    # Filtros dentro da aba
-    col_filtro1, col_filtro2, col_filtro3, col_filtro4 = st.columns([1, 1, 1, 1])
-
-    with col_filtro1:
-        estados_emp_lista = ['Todos'] + listas_filtros['empresa']['estados']
-        estado_emp_selecionado = st.selectbox("Estado", estados_emp_lista, key="filtro_estado_emp", on_change=_on_change_estado_emp)
-
-    with col_filtro2:
-        if estado_emp_selecionado != "Todos":
-            cidades_emp_lista = ['Todas'] + listas_filtros['empresa']['cidades_por_estado'].get(estado_emp_selecionado, [])
-        else:
-            cidades_emp_lista = ['Todas'] + listas_filtros['empresa']['cidades']
-        cidade_emp_selecionada = st.selectbox("Cidade", cidades_emp_lista, key="filtro_cidade_emp", on_change=_on_change_cidade_emp)
-
-    with col_filtro3:
-        # Filtrar bairros baseado na cidade/estado selecionado
-        df_temp = df_empresas.copy()
-        if estado_emp_selecionado != "Todos":
-            df_temp = df_temp[df_temp['uf'] == estado_emp_selecionado]
-        if cidade_emp_selecionada != "Todas":
-            df_temp = df_temp[df_temp['cidade'] == cidade_emp_selecionada]
-        bairros_lista = ['Todos'] + sorted(df_temp['bairro'].dropna().unique().tolist()) if 'bairro' in df_temp.columns else ['Todos']
-        bairros_lista = [b for b in bairros_lista if b and b.strip()]  # Remover vazios
-        bairro_emp_selecionado = st.selectbox("Bairro", bairros_lista, key="filtro_bairro_emp", on_change=_on_change_bairro_emp)
-
-    with col_filtro4:
-        st.markdown("<br>", unsafe_allow_html=True)
-        st.button("Limpar Filtros", key="limpar_empresas", on_click=_limpar_filtro_empresas)
-
-    # Aplicar filtros
-    df_empresas_filtered = apply_filters(df_empresas, estado_emp_selecionado, cidade_emp_selecionada)
-    if bairro_emp_selecionado != "Todos" and 'bairro' in df_empresas_filtered.columns:
-        df_empresas_filtered = df_empresas_filtered[df_empresas_filtered['bairro'] == bairro_emp_selecionado]
-
-    if df_empresas_filtered.empty:
-        st.warning("Nenhuma empresa encontrada com os filtros selecionados.")
-    else:
-        # Métricas rápidas
-        col1, col2, col3, col4 = st.columns(4)
-
-        total = len(df_empresas_filtered)
-        ativas = len(df_empresas_filtered[df_empresas_filtered['status'] == 'Ativo']) if 'status' in df_empresas_filtered.columns else 0
-
-        with col1:
-            create_metric_card("Total Filtrado", format_number(total), "", "", "gray")
-        with col2:
-            create_metric_card("Ativas", format_number(ativas), f"{(ativas/total*100):.1f}%" if total > 0 else "0%", "", "gray")
-        with col3:
-            create_metric_card("Inativas", format_number(total - ativas), "", "", "gray")
-        with col4:
-            if 'acumulado_vouchers' in df_empresas_filtered.columns:
-                vouchers = float(df_empresas_filtered['acumulado_vouchers'].fillna(0).sum())
-            else:
-                vouchers = 0
-            create_metric_card("Total Vouchers", format_number(int(vouchers)), "", "", "gray")
-
-        st.markdown("---")
-
-        # Usar dados pré-calculados (cacheados) em vez de recalcular
-        df_display = df_empresas_filtered.copy()
-
-        # Adicionar contagens usando dicionários cacheados
-        if 'cidade' in df_display.columns:
-            df_display['qtd_pcls_cidade'] = df_display['cidade'].map(pcls_por_cidade).fillna(0).astype(int)
-            df_display['pcl_na_cidade'] = df_display['qtd_pcls_cidade'].apply(lambda x: 'Sim' if x > 0 else 'Não')
-            df_display['qtd_pcls_ativos_cidade'] = df_display['cidade'].map(pcls_ativos_cidade).fillna(0).astype(int)
-            df_display['qtd_pcls_inativos_cidade'] = df_display['qtd_pcls_cidade'] - df_display['qtd_pcls_ativos_cidade']
-        
-        # Garantir que colunas existam para exibição
-        if 'acumulado_vouchers' not in df_display.columns:
-            df_display['acumulado_vouchers'] = 0
-        if 'acumulado_coletas_nao_voucher' not in df_display.columns:
-            df_display['acumulado_coletas_nao_voucher'] = 0
-        if 'acumulado_coletas_total' not in df_display.columns:
-            df_display['acumulado_coletas_total'] = df_display['acumulado_vouchers'] + df_display['acumulado_coletas_nao_voucher']
-        if 'coletas_2025' not in df_display.columns:
-            df_display['coletas_2025'] = 0
-        
-        # Formatar valores para exibição
-        for col in ['acumulado_vouchers', 'acumulado_coletas_nao_voucher', 'acumulado_coletas_total', 'coletas_2025']:
-            if col in df_display.columns:
-                df_display[col] = pd.to_numeric(df_display[col], errors='coerce').fillna(0).astype(int)
-        
-        # Preparar DataFrame para exibição
-        colunas_empresa = [
-            'cnpj', 'razao_social', 'endereco_logradouro', 'bairro', 'cidade', 'uf', 'cep',
-            'data_credenciamento', 'representante',
-            'acumulado_coletas_total', 'acumulado_vouchers', 'acumulado_coletas_nao_voucher',
-            'coletas_2025', 'ultima_coleta', 'status',
-            'qtd_pcls_cidade'
-        ]
-
-        rename_map_empresa = {
-            'cnpj': 'CNPJ', 'razao_social': 'Razão Social',
-            'endereco_logradouro': 'Endereço', 'bairro': 'Bairro',
-            'cidade': 'Cidade', 'uf': 'UF', 'cep': 'CEP',
-            'data_credenciamento': 'Data Credenciamento', 'representante': 'Representante',
-            'acumulado_coletas_total': 'Total Coletas', 'acumulado_vouchers': 'Coletas Voucher',
-            'acumulado_coletas_nao_voucher': 'Coletas Não-Voucher', 'coletas_2025': 'Coletas 2025',
-            'ultima_coleta': 'Última Coleta', 'status': 'Status',
-            'qtd_pcls_cidade': 'PCLs na Cidade'
-        }
-        
-        df_final = prepare_display_dataframe(df_display, colunas_empresa, rename_map_empresa)
-        
-        if not df_final.empty:
-            st.dataframe(df_final, use_container_width=True, hide_index=True, height=500)
-        else:
-            st.warning("Nenhum dado disponível para exibição.")
-        
-        # Download
-        output = BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df_display.to_excel(writer, index=False, sheet_name='Empresas')
-        
-        st.download_button(
-            label="📥 Download Excel",
-            data=output.getvalue(),
-            file_name=f'empresas_{datetime.now().strftime("%Y%m%d")}.xlsx',
-            mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        )
+    _listagem_empresas_fragment()
 
 with tab_analises_especificas:
     create_section_header("🔍", "Análises Específicas", "Consultas customizadas conforme demanda")

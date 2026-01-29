@@ -1106,6 +1106,10 @@ st.markdown("---")
 # CONTEÚDO PRINCIPAL - NAVEGAÇÃO POR ABAS
 # ============================================
 
+def _limpar_filtro_visao_estado():
+    """Callback para limpar filtro da aba Por Estado"""
+    st.session_state["estado_visao_uf"] = "Todos"
+
 @st.fragment
 def _visao_estado_fragment():
     """Conteúdo da aba Por Estado. Fragment para que ao mudar o selectbox apenas esta parte rerun, mantendo a aba ativa."""
@@ -1124,9 +1128,7 @@ def _visao_estado_fragment():
         )
     with col_btn:
         st.markdown("<br>", unsafe_allow_html=True)
-        if st.button("Limpar Filtros", key="limpar_visao_estado"):
-            st.session_state["estado_visao_uf"] = "Todos"
-            st.rerun()
+        st.button("Limpar Filtros", key="limpar_visao_estado", on_click=_limpar_filtro_visao_estado)
     st.markdown("---")
     if estado_filtro == "Todos":
         df_labs_uf = df_labs.copy()
@@ -1620,10 +1622,10 @@ with tab_listagem_pcls:
 
     with col_filtro3:
         st.markdown("<br>", unsafe_allow_html=True)
-        if st.button("Limpar Filtros", key="limpar_pcls"):
+        def _limpar_filtro_pcls():
             st.session_state["filtro_estado_pcl"] = "Todos"
             st.session_state["filtro_cidade_pcl"] = "Todas"
-            st.rerun()
+        st.button("Limpar Filtros", key="limpar_pcls", on_click=_limpar_filtro_pcls)
 
     df_labs_filtered = apply_filters(df_labs, estado_pcl_selecionado, cidade_pcl_selecionada)
 
@@ -1715,10 +1717,10 @@ with tab_listagem_empresas:
 
     with col_filtro3:
         st.markdown("<br>", unsafe_allow_html=True)
-        if st.button("Limpar Filtros", key="limpar_empresas"):
+        def _limpar_filtro_empresas():
             st.session_state["filtro_estado_emp"] = "Todos"
             st.session_state["filtro_cidade_emp"] = "Todas"
-            st.rerun()
+        st.button("Limpar Filtros", key="limpar_empresas", on_click=_limpar_filtro_empresas)
 
     df_empresas_filtered = apply_filters(df_empresas, estado_emp_selecionado, cidade_emp_selecionada)
 

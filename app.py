@@ -197,6 +197,578 @@ def extrair_endereco_sem_bairro(endereco):
         return str(endereco)
 
 # ============================================
+# ADD-961: FUNÇÕES DE VALIDAÇÃO DE QUALIDADE DE DADOS
+# ============================================
+
+def validar_cnpj(cnpj):
+    """
+    Valida CNPJ e retorna (válido, mensagem).
+    Verifica se tem 14 dígitos numéricos.
+    """
+    if pd.isna(cnpj) or cnpj is None or str(cnpj).strip() == '':
+        return False, "CNPJ vazio"
+
+    # Remover formatação
+    cnpj_limpo = ''.join(filter(str.isdigit, str(cnpj)))
+
+    if len(cnpj_limpo) == 0:
+        return False, "CNPJ vazio"
+
+    if len(cnpj_limpo) != 14:
+        return False, f"CNPJ com {len(cnpj_limpo)} dígitos (esperado 14)"
+
+    # Verificar se não é uma sequência inválida (todos iguais)
+    if len(set(cnpj_limpo)) == 1:
+        return False, "CNPJ inválido (dígitos repetidos)"
+
+    return True, "OK"
+
+def validar_cep(cep):
+    """
+    Valida CEP e retorna (válido, mensagem).
+    Verifica se tem 8 dígitos numéricos.
+    """
+    if pd.isna(cep) or cep is None or str(cep).strip() == '':
+        return False, "CEP vazio"
+
+    # Remover formatação
+    cep_limpo = ''.join(filter(str.isdigit, str(cep)))
+
+    if len(cep_limpo) == 0:
+        return False, "CEP vazio"
+
+    if len(cep_limpo) != 8:
+        return False, f"CEP com {len(cep_limpo)} dígitos (esperado 8)"
+
+    return True, "OK"
+
+def validar_uf(uf):
+    """
+    Valida UF e retorna (válido, mensagem).
+    Verifica se é uma sigla válida de estado brasileiro.
+    """
+    UFS_VALIDAS = {
+        'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA',
+        'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN',
+        'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'
+    }
+
+    if pd.isna(uf) or uf is None or str(uf).strip() == '':
+        return False, "UF vazia"
+
+    uf_upper = str(uf).strip().upper()
+
+    if len(uf_upper) != 2:
+        return False, f"UF com {len(uf_upper)} caracteres (esperado 2)"
+
+    if uf_upper not in UFS_VALIDAS:
+        return False, f"UF '{uf_upper}' não é válida"
+
+    return True, "OK"
+
+def validar_data(data, nome_campo="Data"):
+    """
+    Valida uma data e retorna (válido, mensagem).
+    Verifica se é uma data válida e não está no futuro.
+    """
+    if pd.isna(data) or data is None:
+        return False, f"{nome_campo} vazia"
+
+    try:
+        data_parsed = pd.to_datetime(data, errors='coerce')
+        if pd.isna(data_parsed):
+            return False, f"{nome_campo} inválida"
+
+        if data_parsed > pd.Timestamp.now():
+            return False, f"{nome_campo} no futuro"
+
+        return True, "OK"
+    except:
+        return False, f"{nome_campo} inválida"
+
+def identificar_ofensores_pcls(df_pcls):
+    """
+    ADD-961: Identifica problemas de qualidade em PCLs.
+    Retorna DataFrame com todos os ofensores encontrados.
+    """
+    if df_pcls.empty:
+        return pd.DataFrame()
+
+    ofensores = []
+
+    for idx, row in df_pcls.iterrows():
+        cnpj = row.get('cnpj', '')
+        nome = row.get('razao_social', row.get('nome_fantasia', 'N/A'))
+        cidade = row.get('cidade', '')
+        uf = row.get('uf', '')
+        representante = row.get('representante', '')
+
+        # Validar CNPJ (Crítico)
+        valido, msg = validar_cnpj(cnpj)
+        if not valido:
+            ofensores.append({
+                'entidade': 'PCL',
+                'cnpj': cnpj,
+                'nome': nome,
+                'cidade': cidade,
+                'uf': uf,
+                'representante': representante,
+                'campo_problema': 'CNPJ',
+                'tipo_problema': msg,
+                'valor_atual': str(cnpj) if cnpj else '(vazio)',
+                'severidade': 'Crítico',
+                'severidade_ordem': 1
+            })
+
+        # Validar Razão Social (Crítico)
+        razao = row.get('razao_social', '')
+        if pd.isna(razao) or str(razao).strip() == '' or str(razao).lower() in ['nan', 'none', 'null']:
+            ofensores.append({
+                'entidade': 'PCL',
+                'cnpj': cnpj,
+                'nome': nome,
+                'cidade': cidade,
+                'uf': uf,
+                'representante': representante,
+                'campo_problema': 'Razão Social',
+                'tipo_problema': 'Razão Social vazia',
+                'valor_atual': '(vazio)',
+                'severidade': 'Crítico',
+                'severidade_ordem': 1
+            })
+
+        # Validar Cidade (Crítico)
+        if pd.isna(cidade) or str(cidade).strip() == '' or str(cidade).lower() in ['nan', 'none', 'null']:
+            ofensores.append({
+                'entidade': 'PCL',
+                'cnpj': cnpj,
+                'nome': nome,
+                'cidade': cidade,
+                'uf': uf,
+                'representante': representante,
+                'campo_problema': 'Cidade',
+                'tipo_problema': 'Cidade vazia',
+                'valor_atual': '(vazio)',
+                'severidade': 'Crítico',
+                'severidade_ordem': 1
+            })
+
+        # Validar UF (Crítico)
+        valido, msg = validar_uf(uf)
+        if not valido:
+            ofensores.append({
+                'entidade': 'PCL',
+                'cnpj': cnpj,
+                'nome': nome,
+                'cidade': cidade,
+                'uf': uf,
+                'representante': representante,
+                'campo_problema': 'UF',
+                'tipo_problema': msg,
+                'valor_atual': str(uf) if uf else '(vazio)',
+                'severidade': 'Crítico',
+                'severidade_ordem': 1
+            })
+
+        # Validar Endereço (Alto)
+        endereco = row.get('endereco', row.get('endereco_logradouro', ''))
+        if pd.isna(endereco) or str(endereco).strip() == '' or str(endereco).lower() in ['nan', 'none', 'null']:
+            ofensores.append({
+                'entidade': 'PCL',
+                'cnpj': cnpj,
+                'nome': nome,
+                'cidade': cidade,
+                'uf': uf,
+                'representante': representante,
+                'campo_problema': 'Endereço',
+                'tipo_problema': 'Endereço vazio',
+                'valor_atual': '(vazio)',
+                'severidade': 'Alto',
+                'severidade_ordem': 2
+            })
+
+        # Validar CEP (Alto)
+        cep = row.get('cep', '')
+        valido, msg = validar_cep(cep)
+        if not valido:
+            ofensores.append({
+                'entidade': 'PCL',
+                'cnpj': cnpj,
+                'nome': nome,
+                'cidade': cidade,
+                'uf': uf,
+                'representante': representante,
+                'campo_problema': 'CEP',
+                'tipo_problema': msg,
+                'valor_atual': str(cep) if cep else '(vazio)',
+                'severidade': 'Alto',
+                'severidade_ordem': 2
+            })
+
+        # Validar Representante (Médio)
+        if pd.isna(representante) or str(representante).strip() == '' or str(representante).lower() in ['nan', 'none', 'null']:
+            ofensores.append({
+                'entidade': 'PCL',
+                'cnpj': cnpj,
+                'nome': nome,
+                'cidade': cidade,
+                'uf': uf,
+                'representante': representante,
+                'campo_problema': 'Representante',
+                'tipo_problema': 'Representante vazio',
+                'valor_atual': '(vazio)',
+                'severidade': 'Médio',
+                'severidade_ordem': 3
+            })
+
+        # Validar Data Credenciamento (Médio)
+        data_cred = row.get('data_credenciamento', None)
+        valido, msg = validar_data(data_cred, "Data Credenciamento")
+        if not valido:
+            ofensores.append({
+                'entidade': 'PCL',
+                'cnpj': cnpj,
+                'nome': nome,
+                'cidade': cidade,
+                'uf': uf,
+                'representante': representante,
+                'campo_problema': 'Data Credenciamento',
+                'tipo_problema': msg,
+                'valor_atual': str(data_cred) if data_cred else '(vazio)',
+                'severidade': 'Médio',
+                'severidade_ordem': 3
+            })
+
+        # Validar Nome Fantasia (Baixo)
+        nome_fantasia = row.get('nome_fantasia', '')
+        if pd.isna(nome_fantasia) or str(nome_fantasia).strip() == '' or str(nome_fantasia).lower() in ['nan', 'none', 'null']:
+            ofensores.append({
+                'entidade': 'PCL',
+                'cnpj': cnpj,
+                'nome': nome,
+                'cidade': cidade,
+                'uf': uf,
+                'representante': representante,
+                'campo_problema': 'Nome Fantasia',
+                'tipo_problema': 'Nome Fantasia vazio',
+                'valor_atual': '(vazio)',
+                'severidade': 'Baixo',
+                'severidade_ordem': 4
+            })
+
+        # Validar Transportadora (Médio) - PCL sem matriz logística
+        transportadora = row.get('transportadora', '')
+        if pd.isna(transportadora) or str(transportadora).strip() == '' or str(transportadora).lower() in ['nan', 'none', 'null', 'não cadastrado']:
+            ofensores.append({
+                'entidade': 'PCL',
+                'cnpj': cnpj,
+                'nome': nome,
+                'cidade': cidade,
+                'uf': uf,
+                'representante': representante,
+                'campo_problema': 'Transportadora',
+                'tipo_problema': 'Sem transportadora na matriz logística',
+                'valor_atual': '(não cadastrado)',
+                'severidade': 'Médio',
+                'severidade_ordem': 3
+            })
+
+    return pd.DataFrame(ofensores)
+
+def identificar_ofensores_empresas(df_empresas):
+    """
+    ADD-961: Identifica problemas de qualidade em Empresas.
+    Retorna DataFrame com todos os ofensores encontrados.
+    """
+    if df_empresas.empty:
+        return pd.DataFrame()
+
+    ofensores = []
+
+    for idx, row in df_empresas.iterrows():
+        cnpj = row.get('cnpj', '')
+        nome = row.get('razao_social', row.get('nome', 'N/A'))
+        cidade = row.get('cidade', '')
+        uf = row.get('uf', '')
+        representante = row.get('representante', '')
+
+        # Validar CNPJ (Crítico)
+        valido, msg = validar_cnpj(cnpj)
+        if not valido:
+            ofensores.append({
+                'entidade': 'Empresa',
+                'cnpj': cnpj,
+                'nome': nome,
+                'cidade': cidade,
+                'uf': uf,
+                'representante': representante,
+                'campo_problema': 'CNPJ',
+                'tipo_problema': msg,
+                'valor_atual': str(cnpj) if cnpj else '(vazio)',
+                'severidade': 'Crítico',
+                'severidade_ordem': 1
+            })
+
+        # Validar Nome/Razão Social (Crítico)
+        if pd.isna(nome) or str(nome).strip() == '' or str(nome).lower() in ['nan', 'none', 'null']:
+            ofensores.append({
+                'entidade': 'Empresa',
+                'cnpj': cnpj,
+                'nome': nome,
+                'cidade': cidade,
+                'uf': uf,
+                'representante': representante,
+                'campo_problema': 'Nome/Razão Social',
+                'tipo_problema': 'Nome vazio',
+                'valor_atual': '(vazio)',
+                'severidade': 'Crítico',
+                'severidade_ordem': 1
+            })
+
+        # Validar Cidade (Crítico)
+        if pd.isna(cidade) or str(cidade).strip() == '' or str(cidade).lower() in ['nan', 'none', 'null']:
+            ofensores.append({
+                'entidade': 'Empresa',
+                'cnpj': cnpj,
+                'nome': nome,
+                'cidade': cidade,
+                'uf': uf,
+                'representante': representante,
+                'campo_problema': 'Cidade',
+                'tipo_problema': 'Cidade vazia',
+                'valor_atual': '(vazio)',
+                'severidade': 'Crítico',
+                'severidade_ordem': 1
+            })
+
+        # Validar UF (Crítico)
+        valido, msg = validar_uf(uf)
+        if not valido:
+            ofensores.append({
+                'entidade': 'Empresa',
+                'cnpj': cnpj,
+                'nome': nome,
+                'cidade': cidade,
+                'uf': uf,
+                'representante': representante,
+                'campo_problema': 'UF',
+                'tipo_problema': msg,
+                'valor_atual': str(uf) if uf else '(vazio)',
+                'severidade': 'Crítico',
+                'severidade_ordem': 1
+            })
+
+        # Validar Endereço (Alto)
+        endereco = row.get('endereco', row.get('endereco_logradouro', ''))
+        if pd.isna(endereco) or str(endereco).strip() == '' or str(endereco).lower() in ['nan', 'none', 'null']:
+            ofensores.append({
+                'entidade': 'Empresa',
+                'cnpj': cnpj,
+                'nome': nome,
+                'cidade': cidade,
+                'uf': uf,
+                'representante': representante,
+                'campo_problema': 'Endereço',
+                'tipo_problema': 'Endereço vazio',
+                'valor_atual': '(vazio)',
+                'severidade': 'Alto',
+                'severidade_ordem': 2
+            })
+
+        # Validar CEP (Alto)
+        cep = row.get('cep', '')
+        valido, msg = validar_cep(cep)
+        if not valido:
+            ofensores.append({
+                'entidade': 'Empresa',
+                'cnpj': cnpj,
+                'nome': nome,
+                'cidade': cidade,
+                'uf': uf,
+                'representante': representante,
+                'campo_problema': 'CEP',
+                'tipo_problema': msg,
+                'valor_atual': str(cep) if cep else '(vazio)',
+                'severidade': 'Alto',
+                'severidade_ordem': 2
+            })
+
+        # Validar Representante (Médio)
+        if pd.isna(representante) or str(representante).strip() == '' or str(representante).lower() in ['nan', 'none', 'null']:
+            ofensores.append({
+                'entidade': 'Empresa',
+                'cnpj': cnpj,
+                'nome': nome,
+                'cidade': cidade,
+                'uf': uf,
+                'representante': representante,
+                'campo_problema': 'Representante',
+                'tipo_problema': 'Representante vazio',
+                'valor_atual': '(vazio)',
+                'severidade': 'Médio',
+                'severidade_ordem': 3
+            })
+
+        # Validar Data Credenciamento (Médio)
+        data_cred = row.get('data_credenciamento', None)
+        valido, msg = validar_data(data_cred, "Data Credenciamento")
+        if not valido:
+            ofensores.append({
+                'entidade': 'Empresa',
+                'cnpj': cnpj,
+                'nome': nome,
+                'cidade': cidade,
+                'uf': uf,
+                'representante': representante,
+                'campo_problema': 'Data Credenciamento',
+                'tipo_problema': msg,
+                'valor_atual': str(data_cred) if data_cred else '(vazio)',
+                'severidade': 'Médio',
+                'severidade_ordem': 3
+            })
+
+    return pd.DataFrame(ofensores)
+
+def identificar_duplicados(df_pcls, df_empresas):
+    """
+    ADD-961: Identifica CNPJs duplicados em PCLs e Empresas.
+    Retorna DataFrame com os duplicados encontrados.
+    """
+    ofensores = []
+
+    # Duplicados em PCLs
+    if not df_pcls.empty and 'cnpj' in df_pcls.columns:
+        cnpjs_pcl = df_pcls['cnpj'].dropna()
+        duplicados_pcl = cnpjs_pcl[cnpjs_pcl.duplicated(keep=False)]
+        for cnpj in duplicados_pcl.unique():
+            registros = df_pcls[df_pcls['cnpj'] == cnpj]
+            for idx, row in registros.iterrows():
+                ofensores.append({
+                    'entidade': 'PCL',
+                    'cnpj': cnpj,
+                    'nome': row.get('razao_social', row.get('nome_fantasia', 'N/A')),
+                    'cidade': row.get('cidade', ''),
+                    'uf': row.get('uf', ''),
+                    'representante': row.get('representante', ''),
+                    'campo_problema': 'CNPJ',
+                    'tipo_problema': f'CNPJ duplicado ({len(registros)} ocorrências)',
+                    'valor_atual': cnpj,
+                    'severidade': 'Crítico',
+                    'severidade_ordem': 1
+                })
+
+    # Duplicados em Empresas
+    if not df_empresas.empty and 'cnpj' in df_empresas.columns:
+        cnpjs_emp = df_empresas['cnpj'].dropna()
+        duplicados_emp = cnpjs_emp[cnpjs_emp.duplicated(keep=False)]
+        for cnpj in duplicados_emp.unique():
+            registros = df_empresas[df_empresas['cnpj'] == cnpj]
+            for idx, row in registros.iterrows():
+                ofensores.append({
+                    'entidade': 'Empresa',
+                    'cnpj': cnpj,
+                    'nome': row.get('razao_social', row.get('nome', 'N/A')),
+                    'cidade': row.get('cidade', ''),
+                    'uf': row.get('uf', ''),
+                    'representante': row.get('representante', ''),
+                    'campo_problema': 'CNPJ',
+                    'tipo_problema': f'CNPJ duplicado ({len(registros)} ocorrências)',
+                    'valor_atual': cnpj,
+                    'severidade': 'Crítico',
+                    'severidade_ordem': 1
+                })
+
+    return pd.DataFrame(ofensores)
+
+def consolidar_ofensores(df_pcls, df_empresas):
+    """
+    ADD-961: Consolida todos os ofensores em um único DataFrame.
+    """
+    # Identificar ofensores de cada tipo
+    ofensores_pcls = identificar_ofensores_pcls(df_pcls)
+    ofensores_empresas = identificar_ofensores_empresas(df_empresas)
+    ofensores_duplicados = identificar_duplicados(df_pcls, df_empresas)
+
+    # Concatenar todos
+    dfs = [df for df in [ofensores_pcls, ofensores_empresas, ofensores_duplicados] if not df.empty]
+
+    if not dfs:
+        return pd.DataFrame(columns=[
+            'entidade', 'cnpj', 'nome', 'cidade', 'uf', 'representante',
+            'campo_problema', 'tipo_problema', 'valor_atual', 'severidade', 'severidade_ordem'
+        ])
+
+    df_consolidado = pd.concat(dfs, ignore_index=True)
+
+    # Ordenar por severidade e entidade
+    df_consolidado = df_consolidado.sort_values(
+        ['severidade_ordem', 'entidade', 'cnpj', 'campo_problema'],
+        ascending=[True, True, True, True]
+    )
+
+    return df_consolidado
+
+def calcular_metricas_qualidade(df_ofensores, total_pcls, total_empresas):
+    """
+    ADD-961: Calcula métricas de qualidade de dados.
+    """
+    total_registros = total_pcls + total_empresas
+
+    if df_ofensores.empty:
+        return {
+            'total_ofensores': 0,
+            'criticos': 0,
+            'altos': 0,
+            'medios': 0,
+            'baixos': 0,
+            'pcls_com_problema': 0,
+            'empresas_com_problema': 0,
+            'score_qualidade': 100.0,
+            'problemas_por_tipo': {},
+            'problemas_por_representante': {}
+        }
+
+    # Contar por severidade
+    criticos = len(df_ofensores[df_ofensores['severidade'] == 'Crítico'])
+    altos = len(df_ofensores[df_ofensores['severidade'] == 'Alto'])
+    medios = len(df_ofensores[df_ofensores['severidade'] == 'Médio'])
+    baixos = len(df_ofensores[df_ofensores['severidade'] == 'Baixo'])
+
+    # Registros únicos com problemas
+    pcls_com_problema = df_ofensores[df_ofensores['entidade'] == 'PCL']['cnpj'].nunique()
+    empresas_com_problema = df_ofensores[df_ofensores['entidade'] == 'Empresa']['cnpj'].nunique()
+
+    # Score de qualidade (penaliza mais problemas críticos)
+    registros_com_problema_critico = len(df_ofensores[df_ofensores['severidade'] == 'Crítico']['cnpj'].unique())
+    if total_registros > 0:
+        score_qualidade = max(0, 100 - (registros_com_problema_critico / total_registros * 100))
+    else:
+        score_qualidade = 100.0
+
+    # Problemas por tipo
+    problemas_por_tipo = df_ofensores.groupby('tipo_problema').size().to_dict()
+
+    # Problemas por representante
+    df_rep = df_ofensores[df_ofensores['representante'].notna() & (df_ofensores['representante'] != '')]
+    if not df_rep.empty:
+        problemas_por_representante = df_rep.groupby('representante').size().to_dict()
+    else:
+        problemas_por_representante = {}
+
+    return {
+        'total_ofensores': len(df_ofensores),
+        'criticos': criticos,
+        'altos': altos,
+        'medios': medios,
+        'baixos': baixos,
+        'pcls_com_problema': pcls_com_problema,
+        'empresas_com_problema': empresas_com_problema,
+        'score_qualidade': round(score_qualidade, 1),
+        'problemas_por_tipo': problemas_por_tipo,
+        'problemas_por_representante': problemas_por_representante
+    }
+
+# ============================================
 # COMPONENTES DE UI
 # ============================================
 
@@ -615,8 +1187,8 @@ def enrich_pcls_with_logistics(df_labs, df_matriz):
     """Adiciona colunas transportadora e frequencia aos PCLs baseado na cidade/UF"""
     if df_labs.empty or df_matriz.empty:
         df_labs = df_labs.copy()
-        df_labs['transportadora'] = ''
-        df_labs['frequencia'] = ''
+        df_labs['transportadora'] = 'Não cadastrado'
+        df_labs['frequencia'] = 'Não cadastrado'
         return df_labs
 
     df = df_labs.copy()
@@ -628,7 +1200,7 @@ def enrich_pcls_with_logistics(df_labs, df_matriz):
     # Agrupar transportadoras e frequências por cidade/UF
     def join_unique(series):
         values = series.dropna().astype(str)
-        values = [v for v in values if v and v != '-' and v != 'nan']
+        values = [v for v in values if v and v != '-' and v != 'nan' and v.lower() != 'none']
         return ' | '.join(sorted(set(values))) if values else ''
 
     logistica_grouped = df_matriz.groupby(['municipio', 'uf']).agg({
@@ -646,6 +1218,11 @@ def enrich_pcls_with_logistics(df_labs, df_matriz):
 
     df['transportadora'] = df['_merge_key'].map(logistica_dict_transporte).fillna('')
     df['frequencia'] = df['_merge_key'].map(logistica_dict_frequencia).fillna('')
+
+    # Substituir valores vazios e inválidos por mensagem informativa
+    valores_invalidos = ['', 'nan', 'None', 'NaN', 'none', 'NAN']
+    df['transportadora'] = df['transportadora'].replace(valores_invalidos, 'Não cadastrado')
+    df['frequencia'] = df['frequencia'].replace(valores_invalidos, 'Não cadastrado')
 
     # Limpar colunas temporárias
     df.drop(columns=['_cidade_norm', '_uf_norm', '_merge_key'], inplace=True)
@@ -1177,37 +1754,46 @@ def apply_filters(df, estado, cidade):
 def prepare_display_dataframe(df, colunas_desejadas, rename_map):
     """
     Prepara um DataFrame para exibição, evitando colunas duplicadas.
-    
+
     Args:
         df: DataFrame original
         colunas_desejadas: Lista de colunas a exibir (em ordem)
         rename_map: Dicionário de renomeação {nome_original: nome_exibição}
-    
+
     Returns:
         DataFrame pronto para exibição
     """
     # Remover colunas duplicadas do DataFrame original
     df = df.loc[:, ~df.columns.duplicated(keep='first')]
-    
+
     # Selecionar apenas colunas que existem (sem duplicatas)
     colunas_existentes = []
     for col in colunas_desejadas:
         if col in df.columns and col not in colunas_existentes:
             colunas_existentes.append(col)
-    
+
     if not colunas_existentes:
         return pd.DataFrame()
-    
+
     # Criar novo DataFrame com colunas selecionadas
     df_display = df[colunas_existentes].copy()
-    
+
     # Renomear colunas
     rename_final = {k: v for k, v in rename_map.items() if k in df_display.columns}
     df_display = df_display.rename(columns=rename_final)
-    
+
     # Garantir que não há duplicatas após renomeação
     df_display = df_display.loc[:, ~df_display.columns.duplicated(keep='first')]
-    
+
+    # Substituir valores vazios/nulos por "Não cadastrado" em colunas de texto
+    for col in df_display.columns:
+        if df_display[col].dtype == 'object':
+            # Substituir None, NaN, strings vazias e variações de "nan"/"none"
+            df_display[col] = df_display[col].fillna('Não cadastrado')
+            df_display[col] = df_display[col].replace(['', 'nan', 'None', 'NaN', 'none', 'NAN', 'null', 'NULL'], 'Não cadastrado')
+            # Tratar strings que são apenas espaços
+            df_display[col] = df_display[col].apply(lambda x: 'Não cadastrado' if isinstance(x, str) and x.strip() == '' else x)
+
     return df_display
 
 # ============================================
@@ -2275,14 +2861,246 @@ def _analises_especificas_fragment():
             cobertura = cobertura.sort_values('Cidades Atendidas')
             st.dataframe(cobertura, use_container_width=True, hide_index=True)
 
+@st.fragment
+def _qualidade_dados_fragment():
+    """ADD-961: Conteúdo da aba Qualidade de Dados. Fragment para manter a aba ativa ao mudar filtros."""
+    create_section_header("🛡️", "Qualidade de Dados", "Identificação e consolidação de ofensores de cadastro")
+
+    # Consolidar ofensores
+    df_ofensores = consolidar_ofensores(df_labs, df_empresas)
+
+    # Calcular métricas
+    total_pcls = len(df_labs) if not df_labs.empty else 0
+    total_empresas = len(df_empresas) if not df_empresas.empty else 0
+    metricas = calcular_metricas_qualidade(df_ofensores, total_pcls, total_empresas)
+
+    # Cards de métricas principais
+    col1, col2, col3, col4, col5 = st.columns(5)
+
+    with col1:
+        # Score de qualidade com cor baseada no valor
+        score = metricas['score_qualidade']
+        if score >= 90:
+            score_color = "green"
+        elif score >= 70:
+            score_color = "orange"
+        else:
+            score_color = "red"
+        st.metric("Score de Qualidade", f"{score}%", delta=None)
+
+    with col2:
+        st.metric("🔴 Críticos", format_number(metricas['criticos']))
+
+    with col3:
+        st.metric("🟠 Altos", format_number(metricas['altos']))
+
+    with col4:
+        st.metric("🟡 Médios", format_number(metricas['medios']))
+
+    with col5:
+        st.metric("🟢 Baixos", format_number(metricas['baixos']))
+
+    st.markdown("---")
+
+    # Segunda linha de métricas
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        st.metric("Total de Problemas", format_number(metricas['total_ofensores']))
+
+    with col2:
+        st.metric("PCLs com Problema", format_number(metricas['pcls_com_problema']))
+
+    with col3:
+        st.metric("Empresas com Problema", format_number(metricas['empresas_com_problema']))
+
+    with col4:
+        total_registros = total_pcls + total_empresas
+        registros_ok = total_registros - metricas['pcls_com_problema'] - metricas['empresas_com_problema']
+        st.metric("Registros OK", format_number(registros_ok))
+
+    st.markdown("---")
+
+    # Filtros
+    col_filtro1, col_filtro2, col_filtro3 = st.columns(3)
+
+    with col_filtro1:
+        filtro_entidade = st.selectbox(
+            "Entidade",
+            ["Todas", "PCL", "Empresa"],
+            key="filtro_qualidade_entidade"
+        )
+
+    with col_filtro2:
+        filtro_severidade = st.selectbox(
+            "Severidade",
+            ["Todas", "Crítico", "Alto", "Médio", "Baixo"],
+            key="filtro_qualidade_severidade"
+        )
+
+    with col_filtro3:
+        # Lista de tipos de problema únicos
+        tipos_problema = ["Todos"] + sorted(df_ofensores['tipo_problema'].unique().tolist()) if not df_ofensores.empty else ["Todos"]
+        filtro_tipo = st.selectbox(
+            "Tipo de Problema",
+            tipos_problema,
+            key="filtro_qualidade_tipo"
+        )
+
+    # Aplicar filtros
+    df_filtrado = df_ofensores.copy()
+
+    if filtro_entidade != "Todas" and not df_filtrado.empty:
+        df_filtrado = df_filtrado[df_filtrado['entidade'] == filtro_entidade]
+
+    if filtro_severidade != "Todas" and not df_filtrado.empty:
+        df_filtrado = df_filtrado[df_filtrado['severidade'] == filtro_severidade]
+
+    if filtro_tipo != "Todos" and not df_filtrado.empty:
+        df_filtrado = df_filtrado[df_filtrado['tipo_problema'] == filtro_tipo]
+
+    st.markdown("---")
+
+    # Tabs para diferentes visões
+    subtab1, subtab2, subtab3 = st.tabs(["📋 Lista de Ofensores", "📊 Por Tipo de Problema", "👤 Por Representante"])
+
+    with subtab1:
+        if df_filtrado.empty:
+            st.success("✅ Nenhum problema de qualidade encontrado com os filtros selecionados!")
+        else:
+            st.warning(f"⚠️ {len(df_filtrado)} problemas encontrados")
+
+            # Preparar DataFrame para exibição
+            colunas_exibir = ['entidade', 'cnpj', 'nome', 'cidade', 'uf', 'representante', 'campo_problema', 'tipo_problema', 'severidade']
+            df_display = df_filtrado[colunas_exibir].copy()
+            df_display.columns = ['Entidade', 'CNPJ', 'Nome', 'Cidade', 'UF', 'Representante', 'Campo', 'Problema', 'Severidade']
+
+            # Adicionar ícone de severidade
+            def add_severidade_icon(sev):
+                icons = {'Crítico': '🔴', 'Alto': '🟠', 'Médio': '🟡', 'Baixo': '🟢'}
+                return f"{icons.get(sev, '')} {sev}"
+
+            df_display['Severidade'] = df_display['Severidade'].apply(add_severidade_icon)
+
+            st.dataframe(df_display, use_container_width=True, hide_index=True, height=500)
+
+    with subtab2:
+        if not df_ofensores.empty:
+            # Gráfico de problemas por tipo
+            problemas_tipo = df_ofensores.groupby(['tipo_problema', 'severidade']).size().reset_index(name='quantidade')
+            problemas_tipo = problemas_tipo.sort_values('quantidade', ascending=False).head(15)
+
+            if not problemas_tipo.empty:
+                fig = px.bar(
+                    problemas_tipo,
+                    x='quantidade',
+                    y='tipo_problema',
+                    color='severidade',
+                    orientation='h',
+                    title='Top 15 Tipos de Problemas',
+                    color_discrete_map={'Crítico': '#EF4444', 'Alto': '#F97316', 'Médio': '#EAB308', 'Baixo': '#22C55E'}
+                )
+                fig.update_layout(yaxis={'categoryorder': 'total ascending'}, height=500)
+                st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("Nenhum dado para exibir.")
+
+    with subtab3:
+        if metricas['problemas_por_representante']:
+            # Gráfico de problemas por representante
+            df_rep = pd.DataFrame([
+                {'representante': k, 'quantidade': v}
+                for k, v in metricas['problemas_por_representante'].items()
+            ]).sort_values('quantidade', ascending=False).head(15)
+
+            if not df_rep.empty:
+                fig = px.bar(
+                    df_rep,
+                    x='quantidade',
+                    y='representante',
+                    orientation='h',
+                    title='Top 15 Representantes com Mais Problemas',
+                    color='quantidade',
+                    color_continuous_scale='Reds'
+                )
+                fig.update_layout(yaxis={'categoryorder': 'total ascending'}, height=500, showlegend=False)
+                st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("Nenhum problema associado a representantes.")
+
+    st.markdown("---")
+
+    # Download
+    if not df_ofensores.empty:
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            # Aba Resumo
+            resumo_data = {
+                'Métrica': [
+                    'Score de Qualidade (%)',
+                    'Total de Problemas',
+                    'Problemas Críticos',
+                    'Problemas Altos',
+                    'Problemas Médios',
+                    'Problemas Baixos',
+                    'PCLs com Problema',
+                    'Empresas com Problema',
+                    'Total PCLs',
+                    'Total Empresas'
+                ],
+                'Valor': [
+                    metricas['score_qualidade'],
+                    metricas['total_ofensores'],
+                    metricas['criticos'],
+                    metricas['altos'],
+                    metricas['medios'],
+                    metricas['baixos'],
+                    metricas['pcls_com_problema'],
+                    metricas['empresas_com_problema'],
+                    total_pcls,
+                    total_empresas
+                ]
+            }
+            pd.DataFrame(resumo_data).to_excel(writer, index=False, sheet_name='Resumo')
+
+            # Aba Ofensores PCLs
+            df_pcls_ofensores = df_ofensores[df_ofensores['entidade'] == 'PCL'].copy()
+            if not df_pcls_ofensores.empty:
+                df_pcls_ofensores = df_pcls_ofensores.drop(columns=['severidade_ordem'])
+                df_pcls_ofensores.columns = ['Entidade', 'CNPJ', 'Nome', 'Cidade', 'UF', 'Representante', 'Campo', 'Problema', 'Valor Atual', 'Severidade']
+                df_pcls_ofensores.to_excel(writer, index=False, sheet_name='Ofensores PCLs')
+
+            # Aba Ofensores Empresas
+            df_emp_ofensores = df_ofensores[df_ofensores['entidade'] == 'Empresa'].copy()
+            if not df_emp_ofensores.empty:
+                df_emp_ofensores = df_emp_ofensores.drop(columns=['severidade_ordem'])
+                df_emp_ofensores.columns = ['Entidade', 'CNPJ', 'Nome', 'Cidade', 'UF', 'Representante', 'Campo', 'Problema', 'Valor Atual', 'Severidade']
+                df_emp_ofensores.to_excel(writer, index=False, sheet_name='Ofensores Empresas')
+
+            # Aba Por Tipo de Problema
+            problemas_tipo_resumo = df_ofensores.groupby(['tipo_problema', 'severidade']).size().reset_index(name='quantidade')
+            problemas_tipo_resumo = problemas_tipo_resumo.sort_values(['severidade', 'quantidade'], ascending=[True, False])
+            problemas_tipo_resumo.columns = ['Tipo de Problema', 'Severidade', 'Quantidade']
+            problemas_tipo_resumo.to_excel(writer, index=False, sheet_name='Por Tipo de Problema')
+
+        st.download_button(
+            label="📥 Download Relatório de Qualidade (Excel)",
+            data=output.getvalue(),
+            file_name=f'qualidade_dados_{datetime.now().strftime("%Y%m%d")}.xlsx',
+            mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+    else:
+        st.success("✅ Nenhum problema de qualidade encontrado! Parabéns pela excelência dos dados.")
+
 # Abas de navegação (visual original). A aba "Por Estado" usa fragment para manter a aba ativa ao mudar o selectbox.
-tab_visao_geral, tab_visao_estado, tab_analise_coletas, tab_listagem_pcls, tab_listagem_empresas, tab_analises_especificas, tab_ajuda = st.tabs([
+tab_visao_geral, tab_visao_estado, tab_analise_coletas, tab_listagem_pcls, tab_listagem_empresas, tab_analises_especificas, tab_qualidade, tab_ajuda = st.tabs([
     "📈 Visão Geral",
     "🗺️ Por Estado",
     "📊 Coletas",
     "🏥 PCLs",
     "🏢 Empresas",
     "🔍 Análises",
+    "🛡️ Qualidade",
     "❓ Ajuda"
 ])
 
@@ -2441,6 +3259,9 @@ with tab_listagem_empresas:
 with tab_analises_especificas:
     _analises_especificas_fragment()
 
+with tab_qualidade:
+    _qualidade_dados_fragment()
+
 with tab_ajuda:
     create_section_header("❓", "Ajuda / FAQ", "Perguntas frequentes e orientações de uso")
 
@@ -2460,6 +3281,7 @@ with tab_ajuda:
         | **🏥 PCLs** | Tabela completa de laboratórios/pontos de coleta |
         | **🏢 Empresas** | Tabela completa de empresas credenciadas |
         | **🔍 Análises** | Consultas customizadas para cenários específicos |
+        | **🛡️ Qualidade** | Identificação de problemas de cadastro (ADD-961) |
         | **❓ Ajuda** | Esta seção de ajuda |
         """)
 

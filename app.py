@@ -2472,7 +2472,8 @@ def _analises_especificas_fragment():
             "3. Empresas em cidades SEM PCL credenciado",
             "4. Empresas em cidades COM PCL INATIVO (90 dias)",
             "Top PCLs por volume de coletas",
-            "Estados com menor cobertura"
+            "Estados com menor cobertura",
+            "Acompanhamento por Representante"
         ]
     )
 
@@ -2736,6 +2737,233 @@ def _analises_especificas_fragment():
             cobertura.columns = ['UF', 'Cidades Atendidas', 'Total Coletas']
             cobertura = cobertura.sort_values('Cidades Atendidas')
             st.dataframe(cobertura, use_container_width=True, hide_index=True)
+
+    # ADD-955: Acompanhamento por Representante
+    elif analise_tipo == "Acompanhamento por Representante":
+        st.markdown("**Descrição:** Acompanhamento de credenciamentos e atividade por representante com filtros de período.")
+
+        # Obter lista de representantes únicos de PCLs e Empresas
+        representantes_pcl = df_labs['representante'].dropna().unique().tolist() if 'representante' in df_labs.columns else []
+        representantes_emp = df_empresas['representante'].dropna().unique().tolist() if 'representante' in df_empresas.columns else []
+        representantes_todos = sorted(set(representantes_pcl + representantes_emp))
+        representantes_todos = [r for r in representantes_todos if r and str(r).strip() and str(r).lower() not in ['nan', 'none', 'null']]
+
+        if not representantes_todos:
+            st.warning("Nenhum representante encontrado nos dados.")
+        else:
+            # Filtros
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+                representante_selecionado = st.selectbox(
+                    "Representante",
+                    ["Todos"] + representantes_todos,
+                    key="analise_representante"
+                )
+
+            with col2:
+                # Data inicial - padrão: 1 ano atrás
+                data_padrao_inicio = datetime.now() - timedelta(days=365)
+                data_inicio = st.date_input(
+                    "Data Inicial (Credenciamento)",
+                    value=data_padrao_inicio,
+                    key="analise_data_inicio"
+                )
+
+            with col3:
+                data_fim = st.date_input(
+                    "Data Final (Credenciamento)",
+                    value=datetime.now(),
+                    key="analise_data_fim"
+                )
+
+            # Converter datas para datetime
+            data_inicio_dt = pd.to_datetime(data_inicio)
+            data_fim_dt = pd.to_datetime(data_fim) + timedelta(days=1)  # Incluir o dia final
+
+            st.markdown("---")
+
+            # Filtrar PCLs
+            df_pcls_filtrado = df_labs.copy()
+            if 'data_credenciamento' in df_pcls_filtrado.columns:
+                df_pcls_filtrado['data_credenciamento'] = pd.to_datetime(df_pcls_filtrado['data_credenciamento'], errors='coerce')
+                mask_periodo_pcl = (df_pcls_filtrado['data_credenciamento'] >= data_inicio_dt) & (df_pcls_filtrado['data_credenciamento'] < data_fim_dt)
+                df_pcls_filtrado = df_pcls_filtrado[mask_periodo_pcl]
+
+            if representante_selecionado != "Todos" and 'representante' in df_pcls_filtrado.columns:
+                df_pcls_filtrado = df_pcls_filtrado[df_pcls_filtrado['representante'] == representante_selecionado]
+
+            # Filtrar Empresas
+            df_empresas_filtrado = df_empresas.copy()
+            if 'data_credenciamento' in df_empresas_filtrado.columns:
+                df_empresas_filtrado['data_credenciamento'] = pd.to_datetime(df_empresas_filtrado['data_credenciamento'], errors='coerce')
+                mask_periodo_emp = (df_empresas_filtrado['data_credenciamento'] >= data_inicio_dt) & (df_empresas_filtrado['data_credenciamento'] < data_fim_dt)
+                df_empresas_filtrado = df_empresas_filtrado[mask_periodo_emp]
+
+            if representante_selecionado != "Todos" and 'representante' in df_empresas_filtrado.columns:
+                df_empresas_filtrado = df_empresas_filtrado[df_empresas_filtrado['representante'] == representante_selecionado]
+
+            # Métricas do período
+            col1, col2, col3, col4 = st.columns(4)
+
+            with col1:
+                st.metric("PCLs Credenciados", format_number(len(df_pcls_filtrado)))
+
+            with col2:
+                pcls_ativos = len(df_pcls_filtrado[df_pcls_filtrado['status'] == 'Ativo']) if 'status' in df_pcls_filtrado.columns else 0
+                st.metric("PCLs Ativos", format_number(pcls_ativos))
+
+            with col3:
+                st.metric("Empresas Credenciadas", format_number(len(df_empresas_filtrado)))
+
+            with col4:
+                emp_ativas = len(df_empresas_filtrado[df_empresas_filtrado['status'] == 'Ativo']) if 'status' in df_empresas_filtrado.columns else 0
+                st.metric("Empresas Ativas", format_number(emp_ativas))
+
+            # Segunda linha de métricas
+            col1, col2, col3, col4 = st.columns(4)
+
+            with col1:
+                coletas_pcl = df_pcls_filtrado['acumulado_coletas'].sum() if 'acumulado_coletas' in df_pcls_filtrado.columns else 0
+                st.metric("Total Coletas (PCLs)", format_number(int(coletas_pcl)))
+
+            with col2:
+                vouchers = df_empresas_filtrado['acumulado_vouchers'].sum() if 'acumulado_vouchers' in df_empresas_filtrado.columns else 0
+                st.metric("Total Vouchers", format_number(int(vouchers)))
+
+            with col3:
+                cidades_pcl = df_pcls_filtrado['cidade'].nunique() if 'cidade' in df_pcls_filtrado.columns else 0
+                st.metric("Cidades (PCLs)", format_number(cidades_pcl))
+
+            with col4:
+                estados_pcl = df_pcls_filtrado['uf'].nunique() if 'uf' in df_pcls_filtrado.columns else 0
+                st.metric("Estados (PCLs)", format_number(estados_pcl))
+
+            st.markdown("---")
+
+            # Tabs para PCLs e Empresas
+            tab_pcls, tab_empresas, tab_resumo = st.tabs(["🏥 PCLs no Período", "🏢 Empresas no Período", "📊 Resumo por Representante"])
+
+            with tab_pcls:
+                if df_pcls_filtrado.empty:
+                    st.info("Nenhum PCL encontrado no período selecionado.")
+                else:
+                    cols = ['cnpj', 'razao_social', 'cidade', 'uf', 'representante', 'data_credenciamento', 'acumulado_coletas', 'status']
+                    cols_available = [c for c in cols if c in df_pcls_filtrado.columns]
+                    df_display = df_pcls_filtrado[cols_available].copy()
+
+                    rename_map = {
+                        'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'cidade': 'Cidade', 'uf': 'UF',
+                        'representante': 'Representante', 'data_credenciamento': 'Data Credenciamento',
+                        'acumulado_coletas': 'Coletas', 'status': 'Status'
+                    }
+                    df_display = df_display.rename(columns={k: v for k, v in rename_map.items() if k in df_display.columns})
+
+                    st.dataframe(df_display, use_container_width=True, hide_index=True, height=400)
+
+                    # Download
+                    output = BytesIO()
+                    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                        df_display.to_excel(writer, index=False, sheet_name='PCLs')
+                    st.download_button(
+                        "📥 Download PCLs",
+                        output.getvalue(),
+                        f'pcls_representante_{datetime.now().strftime("%Y%m%d")}.xlsx',
+                        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                    )
+
+            with tab_empresas:
+                if df_empresas_filtrado.empty:
+                    st.info("Nenhuma empresa encontrada no período selecionado.")
+                else:
+                    cols = ['cnpj', 'razao_social', 'cidade', 'uf', 'representante', 'data_credenciamento', 'acumulado_vouchers', 'status']
+                    cols_available = [c for c in cols if c in df_empresas_filtrado.columns]
+                    df_display = df_empresas_filtrado[cols_available].copy()
+
+                    rename_map = {
+                        'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'cidade': 'Cidade', 'uf': 'UF',
+                        'representante': 'Representante', 'data_credenciamento': 'Data Credenciamento',
+                        'acumulado_vouchers': 'Vouchers', 'status': 'Status'
+                    }
+                    df_display = df_display.rename(columns={k: v for k, v in rename_map.items() if k in df_display.columns})
+
+                    st.dataframe(df_display, use_container_width=True, hide_index=True, height=400)
+
+                    # Download
+                    output = BytesIO()
+                    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                        df_display.to_excel(writer, index=False, sheet_name='Empresas')
+                    st.download_button(
+                        "📥 Download Empresas",
+                        output.getvalue(),
+                        f'empresas_representante_{datetime.now().strftime("%Y%m%d")}.xlsx',
+                        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                    )
+
+            with tab_resumo:
+                st.markdown("**Resumo de credenciamentos por representante no período:**")
+
+                # Resumo PCLs por representante
+                if not df_pcls_filtrado.empty and 'representante' in df_pcls_filtrado.columns:
+                    resumo_pcls = df_pcls_filtrado.groupby('representante').agg({
+                        'cnpj': 'count',
+                        'acumulado_coletas': 'sum' if 'acumulado_coletas' in df_pcls_filtrado.columns else 'count',
+                        'status': lambda x: (x == 'Ativo').sum() if 'status' in df_pcls_filtrado.columns else 0
+                    }).reset_index()
+                    resumo_pcls.columns = ['Representante', 'PCLs Credenciados', 'Total Coletas', 'PCLs Ativos']
+                    resumo_pcls = resumo_pcls.sort_values('PCLs Credenciados', ascending=False)
+                else:
+                    resumo_pcls = pd.DataFrame(columns=['Representante', 'PCLs Credenciados', 'Total Coletas', 'PCLs Ativos'])
+
+                # Resumo Empresas por representante
+                if not df_empresas_filtrado.empty and 'representante' in df_empresas_filtrado.columns:
+                    resumo_emp = df_empresas_filtrado.groupby('representante').agg({
+                        'cnpj': 'count',
+                        'acumulado_vouchers': 'sum' if 'acumulado_vouchers' in df_empresas_filtrado.columns else 'count',
+                        'status': lambda x: (x == 'Ativo').sum() if 'status' in df_empresas_filtrado.columns else 0
+                    }).reset_index()
+                    resumo_emp.columns = ['Representante', 'Empresas Credenciadas', 'Total Vouchers', 'Empresas Ativas']
+                else:
+                    resumo_emp = pd.DataFrame(columns=['Representante', 'Empresas Credenciadas', 'Total Vouchers', 'Empresas Ativas'])
+
+                # Merge dos resumos
+                if not resumo_pcls.empty or not resumo_emp.empty:
+                    if not resumo_pcls.empty and not resumo_emp.empty:
+                        resumo_total = pd.merge(resumo_pcls, resumo_emp, on='Representante', how='outer').fillna(0)
+                    elif not resumo_pcls.empty:
+                        resumo_total = resumo_pcls.copy()
+                        resumo_total['Empresas Credenciadas'] = 0
+                        resumo_total['Total Vouchers'] = 0
+                        resumo_total['Empresas Ativas'] = 0
+                    else:
+                        resumo_total = resumo_emp.copy()
+                        resumo_total['PCLs Credenciados'] = 0
+                        resumo_total['Total Coletas'] = 0
+                        resumo_total['PCLs Ativos'] = 0
+
+                    # Ordenar e formatar
+                    resumo_total['Total Credenciamentos'] = resumo_total['PCLs Credenciados'] + resumo_total['Empresas Credenciadas']
+                    resumo_total = resumo_total.sort_values('Total Credenciamentos', ascending=False)
+
+                    # Converter colunas numéricas para inteiros
+                    for col in ['PCLs Credenciados', 'Total Coletas', 'PCLs Ativos', 'Empresas Credenciadas', 'Total Vouchers', 'Empresas Ativas', 'Total Credenciamentos']:
+                        if col in resumo_total.columns:
+                            resumo_total[col] = resumo_total[col].astype(int)
+
+                    st.dataframe(resumo_total, use_container_width=True, hide_index=True)
+
+                    # Download resumo
+                    output = BytesIO()
+                    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                        resumo_total.to_excel(writer, index=False, sheet_name='Resumo por Representante')
+                    st.download_button(
+                        "📥 Download Resumo",
+                        output.getvalue(),
+                        f'resumo_representantes_{datetime.now().strftime("%Y%m%d")}.xlsx',
+                        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                    )
+                else:
+                    st.info("Nenhum dado para exibir no resumo.")
 
 @st.fragment
 def _qualidade_dados_fragment():
@@ -3312,6 +3540,28 @@ with tab_ajuda:
             Lista estados ordenados por **quantidade de cidades atendidas** (menor para maior).
 
             **Utilidade:** Identificar oportunidades de expansão territorial.
+            """)
+
+        with st.expander("7. Acompanhamento por Representante (ADD-955)"):
+            st.markdown("""
+            Permite acompanhar os **credenciamentos por representante** com filtros de período.
+
+            **Filtros disponíveis:**
+            - **Representante:** Selecione um representante específico ou "Todos"
+            - **Data Inicial/Final:** Filtra credenciamentos realizados no período
+
+            **Métricas exibidas:**
+            - PCLs e Empresas credenciados no período
+            - PCLs e Empresas ativos
+            - Total de coletas e vouchers
+            - Cobertura geográfica (cidades/estados)
+
+            **Abas de detalhamento:**
+            - PCLs no Período: Lista detalhada dos PCLs credenciados
+            - Empresas no Período: Lista detalhada das empresas credenciadas
+            - Resumo por Representante: Ranking consolidado de todos os representantes
+
+            **Utilidade:** Avaliar performance de representantes comerciais e acompanhar metas de credenciamento.
             """)
 
     with subtab5:

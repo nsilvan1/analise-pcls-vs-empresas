@@ -286,403 +286,263 @@ def validar_data(data, nome_campo="Data"):
     except:
         return False, f"{nome_campo} inválida"
 
+def _campo_vazio(series):
+    """Verifica se valores em uma Series são vazios/nulos."""
+    return series.isna() | (series.astype(str).str.strip() == '') | (series.astype(str).str.lower().isin(['nan', 'none', 'null']))
+
+def _validar_cnpj_vetorizado(series):
+    """Valida CNPJs de forma vetorizada. Retorna Series booleana (True = inválido)."""
+    # Limpar e verificar
+    cnpj_limpo = series.astype(str).str.replace(r'[^\d]', '', regex=True)
+    vazio = cnpj_limpo.str.len() == 0
+    tamanho_errado = (cnpj_limpo.str.len() != 14) & ~vazio
+    repetido = cnpj_limpo.apply(lambda x: len(set(x)) == 1 if len(x) == 14 else False)
+    return vazio | tamanho_errado | repetido
+
+def _validar_cep_vetorizado(series):
+    """Valida CEPs de forma vetorizada. Retorna Series booleana (True = inválido)."""
+    cep_limpo = series.astype(str).str.replace(r'[^\d]', '', regex=True)
+    vazio = cep_limpo.str.len() == 0
+    tamanho_errado = (cep_limpo.str.len() != 8) & ~vazio
+    return vazio | tamanho_errado
+
+def _validar_uf_vetorizada(series):
+    """Valida UFs de forma vetorizada. Retorna Series booleana (True = inválido)."""
+    UFS_VALIDAS = {'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA',
+                   'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN',
+                   'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'}
+    uf_upper = series.astype(str).str.strip().str.upper()
+    vazio = uf_upper == ''
+    invalido = ~uf_upper.isin(UFS_VALIDAS) & ~vazio
+    return vazio | invalido
+
 def identificar_ofensores_pcls(df_pcls):
     """
     ADD-961: Identifica problemas de qualidade em PCLs.
-    Retorna DataFrame com todos os ofensores encontrados.
+    Versão otimizada com operações vetorizadas.
     """
     if df_pcls.empty:
         return pd.DataFrame()
 
-    ofensores = []
+    ofensores_list = []
 
-    for idx, row in df_pcls.iterrows():
-        cnpj = row.get('cnpj', '')
-        nome = row.get('razao_social', row.get('nome_fantasia', 'N/A'))
-        cidade = row.get('cidade', '')
-        uf = row.get('uf', '')
-        representante = row.get('representante', '')
+    # Preparar colunas base
+    df = df_pcls.copy()
+    df['_nome'] = df['razao_social'].fillna(df.get('nome_fantasia', 'N/A'))
+    df['_cnpj'] = df.get('cnpj', '')
+    df['_cidade'] = df.get('cidade', '')
+    df['_uf'] = df.get('uf', '')
+    df['_representante'] = df.get('representante', '')
 
-        # Validar CNPJ (Crítico)
-        valido, msg = validar_cnpj(cnpj)
-        if not valido:
-            ofensores.append({
-                'entidade': 'PCL',
-                'cnpj': cnpj,
-                'nome': nome,
-                'cidade': cidade,
-                'uf': uf,
-                'representante': representante,
-                'campo_problema': 'CNPJ',
-                'tipo_problema': msg,
-                'valor_atual': str(cnpj) if cnpj else '(vazio)',
-                'severidade': 'Crítico',
-                'severidade_ordem': 1
-            })
+    base_cols = ['_cnpj', '_nome', '_cidade', '_uf', '_representante']
 
-        # Validar Razão Social (Crítico)
-        razao = row.get('razao_social', '')
-        if pd.isna(razao) or str(razao).strip() == '' or str(razao).lower() in ['nan', 'none', 'null']:
-            ofensores.append({
-                'entidade': 'PCL',
-                'cnpj': cnpj,
-                'nome': nome,
-                'cidade': cidade,
-                'uf': uf,
-                'representante': representante,
-                'campo_problema': 'Razão Social',
-                'tipo_problema': 'Razão Social vazia',
-                'valor_atual': '(vazio)',
-                'severidade': 'Crítico',
-                'severidade_ordem': 1
-            })
+    # Função auxiliar para criar ofensores
+    def add_ofensores(mask, campo, tipo, severidade, ordem, valor_col=None):
+        if mask.any():
+            df_problema = df.loc[mask, base_cols].copy()
+            df_problema['entidade'] = 'PCL'
+            df_problema['campo_problema'] = campo
+            df_problema['tipo_problema'] = tipo
+            df_problema['valor_atual'] = df.loc[mask, valor_col].astype(str).replace('', '(vazio)') if valor_col and valor_col in df.columns else '(vazio)'
+            df_problema['severidade'] = severidade
+            df_problema['severidade_ordem'] = ordem
+            df_problema.columns = ['cnpj', 'nome', 'cidade', 'uf', 'representante', 'entidade', 'campo_problema', 'tipo_problema', 'valor_atual', 'severidade', 'severidade_ordem']
+            ofensores_list.append(df_problema)
 
-        # Validar Cidade (Crítico)
-        if pd.isna(cidade) or str(cidade).strip() == '' or str(cidade).lower() in ['nan', 'none', 'null']:
-            ofensores.append({
-                'entidade': 'PCL',
-                'cnpj': cnpj,
-                'nome': nome,
-                'cidade': cidade,
-                'uf': uf,
-                'representante': representante,
-                'campo_problema': 'Cidade',
-                'tipo_problema': 'Cidade vazia',
-                'valor_atual': '(vazio)',
-                'severidade': 'Crítico',
-                'severidade_ordem': 1
-            })
+    # CNPJ inválido (Crítico)
+    if 'cnpj' in df.columns:
+        mask_cnpj = _validar_cnpj_vetorizado(df['cnpj'])
+        add_ofensores(mask_cnpj, 'CNPJ', 'CNPJ vazio ou inválido', 'Crítico', 1, 'cnpj')
 
-        # Validar UF (Crítico)
-        valido, msg = validar_uf(uf)
-        if not valido:
-            ofensores.append({
-                'entidade': 'PCL',
-                'cnpj': cnpj,
-                'nome': nome,
-                'cidade': cidade,
-                'uf': uf,
-                'representante': representante,
-                'campo_problema': 'UF',
-                'tipo_problema': msg,
-                'valor_atual': str(uf) if uf else '(vazio)',
-                'severidade': 'Crítico',
-                'severidade_ordem': 1
-            })
+    # Razão Social vazia (Crítico)
+    if 'razao_social' in df.columns:
+        mask_razao = _campo_vazio(df['razao_social'])
+        add_ofensores(mask_razao, 'Razão Social', 'Razão Social vazia', 'Crítico', 1)
 
-        # Validar Endereço (Alto)
-        endereco = row.get('endereco', row.get('endereco_logradouro', ''))
-        if pd.isna(endereco) or str(endereco).strip() == '' or str(endereco).lower() in ['nan', 'none', 'null']:
-            ofensores.append({
-                'entidade': 'PCL',
-                'cnpj': cnpj,
-                'nome': nome,
-                'cidade': cidade,
-                'uf': uf,
-                'representante': representante,
-                'campo_problema': 'Endereço',
-                'tipo_problema': 'Endereço vazio',
-                'valor_atual': '(vazio)',
-                'severidade': 'Alto',
-                'severidade_ordem': 2
-            })
+    # Cidade vazia (Crítico)
+    if 'cidade' in df.columns:
+        mask_cidade = _campo_vazio(df['cidade'])
+        add_ofensores(mask_cidade, 'Cidade', 'Cidade vazia', 'Crítico', 1)
 
-        # Validar CEP (Alto)
-        cep = row.get('cep', '')
-        valido, msg = validar_cep(cep)
-        if not valido:
-            ofensores.append({
-                'entidade': 'PCL',
-                'cnpj': cnpj,
-                'nome': nome,
-                'cidade': cidade,
-                'uf': uf,
-                'representante': representante,
-                'campo_problema': 'CEP',
-                'tipo_problema': msg,
-                'valor_atual': str(cep) if cep else '(vazio)',
-                'severidade': 'Alto',
-                'severidade_ordem': 2
-            })
+    # UF inválida (Crítico)
+    if 'uf' in df.columns:
+        mask_uf = _validar_uf_vetorizada(df['uf'])
+        add_ofensores(mask_uf, 'UF', 'UF vazia ou inválida', 'Crítico', 1, 'uf')
 
-        # Validar Representante (Médio)
-        if pd.isna(representante) or str(representante).strip() == '' or str(representante).lower() in ['nan', 'none', 'null']:
-            ofensores.append({
-                'entidade': 'PCL',
-                'cnpj': cnpj,
-                'nome': nome,
-                'cidade': cidade,
-                'uf': uf,
-                'representante': representante,
-                'campo_problema': 'Representante',
-                'tipo_problema': 'Representante vazio',
-                'valor_atual': '(vazio)',
-                'severidade': 'Médio',
-                'severidade_ordem': 3
-            })
+    # Endereço vazio (Alto)
+    endereco_col = 'endereco' if 'endereco' in df.columns else 'endereco_logradouro' if 'endereco_logradouro' in df.columns else None
+    if endereco_col:
+        mask_end = _campo_vazio(df[endereco_col])
+        add_ofensores(mask_end, 'Endereço', 'Endereço vazio', 'Alto', 2)
 
-        # Validar Data Credenciamento (Médio)
-        data_cred = row.get('data_credenciamento', None)
-        valido, msg = validar_data(data_cred, "Data Credenciamento")
-        if not valido:
-            ofensores.append({
-                'entidade': 'PCL',
-                'cnpj': cnpj,
-                'nome': nome,
-                'cidade': cidade,
-                'uf': uf,
-                'representante': representante,
-                'campo_problema': 'Data Credenciamento',
-                'tipo_problema': msg,
-                'valor_atual': str(data_cred) if data_cred else '(vazio)',
-                'severidade': 'Médio',
-                'severidade_ordem': 3
-            })
+    # CEP inválido (Alto)
+    if 'cep' in df.columns:
+        mask_cep = _validar_cep_vetorizado(df['cep'])
+        add_ofensores(mask_cep, 'CEP', 'CEP vazio ou inválido', 'Alto', 2, 'cep')
 
-        # Validar Nome Fantasia (Baixo)
-        nome_fantasia = row.get('nome_fantasia', '')
-        if pd.isna(nome_fantasia) or str(nome_fantasia).strip() == '' or str(nome_fantasia).lower() in ['nan', 'none', 'null']:
-            ofensores.append({
-                'entidade': 'PCL',
-                'cnpj': cnpj,
-                'nome': nome,
-                'cidade': cidade,
-                'uf': uf,
-                'representante': representante,
-                'campo_problema': 'Nome Fantasia',
-                'tipo_problema': 'Nome Fantasia vazio',
-                'valor_atual': '(vazio)',
-                'severidade': 'Baixo',
-                'severidade_ordem': 4
-            })
+    # Representante vazio (Médio)
+    if 'representante' in df.columns:
+        mask_rep = _campo_vazio(df['representante'])
+        add_ofensores(mask_rep, 'Representante', 'Representante vazio', 'Médio', 3)
 
-        # Validar Transportadora (Médio) - PCL sem matriz logística
-        transportadora = row.get('transportadora', '')
-        if pd.isna(transportadora) or str(transportadora).strip() == '' or str(transportadora).lower() in ['nan', 'none', 'null', 'não cadastrado']:
-            ofensores.append({
-                'entidade': 'PCL',
-                'cnpj': cnpj,
-                'nome': nome,
-                'cidade': cidade,
-                'uf': uf,
-                'representante': representante,
-                'campo_problema': 'Transportadora',
-                'tipo_problema': 'Sem transportadora na matriz logística',
-                'valor_atual': '(não cadastrado)',
-                'severidade': 'Médio',
-                'severidade_ordem': 3
-            })
+    # Nome Fantasia vazio (Baixo)
+    if 'nome_fantasia' in df.columns:
+        mask_fantasia = _campo_vazio(df['nome_fantasia'])
+        add_ofensores(mask_fantasia, 'Nome Fantasia', 'Nome Fantasia vazio', 'Baixo', 4)
 
-    return pd.DataFrame(ofensores)
+    # Transportadora não cadastrada (Médio)
+    if 'transportadora' in df.columns:
+        mask_transp = _campo_vazio(df['transportadora']) | (df['transportadora'].astype(str).str.lower() == 'não cadastrado')
+        add_ofensores(mask_transp, 'Transportadora', 'Sem transportadora na matriz logística', 'Médio', 3)
+
+    if ofensores_list:
+        return pd.concat(ofensores_list, ignore_index=True)
+    return pd.DataFrame()
 
 def identificar_ofensores_empresas(df_empresas):
     """
     ADD-961: Identifica problemas de qualidade em Empresas.
-    Retorna DataFrame com todos os ofensores encontrados.
+    Versão otimizada com operações vetorizadas.
     """
     if df_empresas.empty:
         return pd.DataFrame()
 
-    ofensores = []
+    ofensores_list = []
 
-    for idx, row in df_empresas.iterrows():
-        cnpj = row.get('cnpj', '')
-        nome = row.get('razao_social', row.get('nome', 'N/A'))
-        cidade = row.get('cidade', '')
-        uf = row.get('uf', '')
-        representante = row.get('representante', '')
+    # Preparar colunas base
+    df = df_empresas.copy()
+    df['_nome'] = df['razao_social'].fillna(df.get('nome', 'N/A')) if 'razao_social' in df.columns else df.get('nome', 'N/A')
+    df['_cnpj'] = df.get('cnpj', '')
+    df['_cidade'] = df.get('cidade', '')
+    df['_uf'] = df.get('uf', '')
+    df['_representante'] = df.get('representante', '')
 
-        # Validar CNPJ (Crítico)
-        valido, msg = validar_cnpj(cnpj)
-        if not valido:
-            ofensores.append({
-                'entidade': 'Empresa',
-                'cnpj': cnpj,
-                'nome': nome,
-                'cidade': cidade,
-                'uf': uf,
-                'representante': representante,
-                'campo_problema': 'CNPJ',
-                'tipo_problema': msg,
-                'valor_atual': str(cnpj) if cnpj else '(vazio)',
-                'severidade': 'Crítico',
-                'severidade_ordem': 1
-            })
+    base_cols = ['_cnpj', '_nome', '_cidade', '_uf', '_representante']
 
-        # Validar Nome/Razão Social (Crítico)
-        if pd.isna(nome) or str(nome).strip() == '' or str(nome).lower() in ['nan', 'none', 'null']:
-            ofensores.append({
-                'entidade': 'Empresa',
-                'cnpj': cnpj,
-                'nome': nome,
-                'cidade': cidade,
-                'uf': uf,
-                'representante': representante,
-                'campo_problema': 'Nome/Razão Social',
-                'tipo_problema': 'Nome vazio',
-                'valor_atual': '(vazio)',
-                'severidade': 'Crítico',
-                'severidade_ordem': 1
-            })
+    # Função auxiliar para criar ofensores
+    def add_ofensores(mask, campo, tipo, severidade, ordem, valor_col=None):
+        if mask.any():
+            df_problema = df.loc[mask, base_cols].copy()
+            df_problema['entidade'] = 'Empresa'
+            df_problema['campo_problema'] = campo
+            df_problema['tipo_problema'] = tipo
+            df_problema['valor_atual'] = df.loc[mask, valor_col].astype(str).replace('', '(vazio)') if valor_col and valor_col in df.columns else '(vazio)'
+            df_problema['severidade'] = severidade
+            df_problema['severidade_ordem'] = ordem
+            df_problema.columns = ['cnpj', 'nome', 'cidade', 'uf', 'representante', 'entidade', 'campo_problema', 'tipo_problema', 'valor_atual', 'severidade', 'severidade_ordem']
+            ofensores_list.append(df_problema)
 
-        # Validar Cidade (Crítico)
-        if pd.isna(cidade) or str(cidade).strip() == '' or str(cidade).lower() in ['nan', 'none', 'null']:
-            ofensores.append({
-                'entidade': 'Empresa',
-                'cnpj': cnpj,
-                'nome': nome,
-                'cidade': cidade,
-                'uf': uf,
-                'representante': representante,
-                'campo_problema': 'Cidade',
-                'tipo_problema': 'Cidade vazia',
-                'valor_atual': '(vazio)',
-                'severidade': 'Crítico',
-                'severidade_ordem': 1
-            })
+    # CNPJ inválido (Crítico)
+    if 'cnpj' in df.columns:
+        mask_cnpj = _validar_cnpj_vetorizado(df['cnpj'])
+        add_ofensores(mask_cnpj, 'CNPJ', 'CNPJ vazio ou inválido', 'Crítico', 1, 'cnpj')
 
-        # Validar UF (Crítico)
-        valido, msg = validar_uf(uf)
-        if not valido:
-            ofensores.append({
-                'entidade': 'Empresa',
-                'cnpj': cnpj,
-                'nome': nome,
-                'cidade': cidade,
-                'uf': uf,
-                'representante': representante,
-                'campo_problema': 'UF',
-                'tipo_problema': msg,
-                'valor_atual': str(uf) if uf else '(vazio)',
-                'severidade': 'Crítico',
-                'severidade_ordem': 1
-            })
+    # Nome/Razão Social vazia (Crítico)
+    nome_col = 'razao_social' if 'razao_social' in df.columns else 'nome' if 'nome' in df.columns else None
+    if nome_col:
+        mask_nome = _campo_vazio(df[nome_col])
+        add_ofensores(mask_nome, 'Nome/Razão Social', 'Nome vazio', 'Crítico', 1)
 
-        # Validar Endereço (Alto)
-        endereco = row.get('endereco', row.get('endereco_logradouro', ''))
-        if pd.isna(endereco) or str(endereco).strip() == '' or str(endereco).lower() in ['nan', 'none', 'null']:
-            ofensores.append({
-                'entidade': 'Empresa',
-                'cnpj': cnpj,
-                'nome': nome,
-                'cidade': cidade,
-                'uf': uf,
-                'representante': representante,
-                'campo_problema': 'Endereço',
-                'tipo_problema': 'Endereço vazio',
-                'valor_atual': '(vazio)',
-                'severidade': 'Alto',
-                'severidade_ordem': 2
-            })
+    # Cidade vazia (Crítico)
+    if 'cidade' in df.columns:
+        mask_cidade = _campo_vazio(df['cidade'])
+        add_ofensores(mask_cidade, 'Cidade', 'Cidade vazia', 'Crítico', 1)
 
-        # Validar CEP (Alto)
-        cep = row.get('cep', '')
-        valido, msg = validar_cep(cep)
-        if not valido:
-            ofensores.append({
-                'entidade': 'Empresa',
-                'cnpj': cnpj,
-                'nome': nome,
-                'cidade': cidade,
-                'uf': uf,
-                'representante': representante,
-                'campo_problema': 'CEP',
-                'tipo_problema': msg,
-                'valor_atual': str(cep) if cep else '(vazio)',
-                'severidade': 'Alto',
-                'severidade_ordem': 2
-            })
+    # UF inválida (Crítico)
+    if 'uf' in df.columns:
+        mask_uf = _validar_uf_vetorizada(df['uf'])
+        add_ofensores(mask_uf, 'UF', 'UF vazia ou inválida', 'Crítico', 1, 'uf')
 
-        # Validar Representante (Médio)
-        if pd.isna(representante) or str(representante).strip() == '' or str(representante).lower() in ['nan', 'none', 'null']:
-            ofensores.append({
-                'entidade': 'Empresa',
-                'cnpj': cnpj,
-                'nome': nome,
-                'cidade': cidade,
-                'uf': uf,
-                'representante': representante,
-                'campo_problema': 'Representante',
-                'tipo_problema': 'Representante vazio',
-                'valor_atual': '(vazio)',
-                'severidade': 'Médio',
-                'severidade_ordem': 3
-            })
+    # Endereço vazio (Alto)
+    endereco_col = 'endereco' if 'endereco' in df.columns else 'endereco_logradouro' if 'endereco_logradouro' in df.columns else None
+    if endereco_col:
+        mask_end = _campo_vazio(df[endereco_col])
+        add_ofensores(mask_end, 'Endereço', 'Endereço vazio', 'Alto', 2)
 
-        # Validar Data Credenciamento (Médio)
-        data_cred = row.get('data_credenciamento', None)
-        valido, msg = validar_data(data_cred, "Data Credenciamento")
-        if not valido:
-            ofensores.append({
-                'entidade': 'Empresa',
-                'cnpj': cnpj,
-                'nome': nome,
-                'cidade': cidade,
-                'uf': uf,
-                'representante': representante,
-                'campo_problema': 'Data Credenciamento',
-                'tipo_problema': msg,
-                'valor_atual': str(data_cred) if data_cred else '(vazio)',
-                'severidade': 'Médio',
-                'severidade_ordem': 3
-            })
+    # CEP inválido (Alto)
+    if 'cep' in df.columns:
+        mask_cep = _validar_cep_vetorizado(df['cep'])
+        add_ofensores(mask_cep, 'CEP', 'CEP vazio ou inválido', 'Alto', 2, 'cep')
 
-    return pd.DataFrame(ofensores)
+    # Representante vazio (Médio)
+    if 'representante' in df.columns:
+        mask_rep = _campo_vazio(df['representante'])
+        add_ofensores(mask_rep, 'Representante', 'Representante vazio', 'Médio', 3)
+
+    if ofensores_list:
+        return pd.concat(ofensores_list, ignore_index=True)
+    return pd.DataFrame()
 
 def identificar_duplicados(df_pcls, df_empresas):
     """
     ADD-961: Identifica CNPJs duplicados em PCLs e Empresas.
-    Retorna DataFrame com os duplicados encontrados.
+    Versão otimizada com operações vetorizadas.
     """
-    ofensores = []
+    ofensores_list = []
 
     # Duplicados em PCLs
     if not df_pcls.empty and 'cnpj' in df_pcls.columns:
-        cnpjs_pcl = df_pcls['cnpj'].dropna()
-        duplicados_pcl = cnpjs_pcl[cnpjs_pcl.duplicated(keep=False)]
-        for cnpj in duplicados_pcl.unique():
-            registros = df_pcls[df_pcls['cnpj'] == cnpj]
-            for idx, row in registros.iterrows():
-                ofensores.append({
-                    'entidade': 'PCL',
-                    'cnpj': cnpj,
-                    'nome': row.get('razao_social', row.get('nome_fantasia', 'N/A')),
-                    'cidade': row.get('cidade', ''),
-                    'uf': row.get('uf', ''),
-                    'representante': row.get('representante', ''),
-                    'campo_problema': 'CNPJ',
-                    'tipo_problema': f'CNPJ duplicado ({len(registros)} ocorrências)',
-                    'valor_atual': cnpj,
-                    'severidade': 'Crítico',
-                    'severidade_ordem': 1
-                })
+        # Contar ocorrências de cada CNPJ
+        contagem = df_pcls['cnpj'].value_counts()
+        cnpjs_duplicados = contagem[contagem > 1].index
+
+        if len(cnpjs_duplicados) > 0:
+            # Filtrar registros duplicados
+            mask_dup = df_pcls['cnpj'].isin(cnpjs_duplicados)
+            df_dup = df_pcls[mask_dup].copy()
+
+            # Adicionar contagem de ocorrências
+            df_dup['_contagem'] = df_dup['cnpj'].map(contagem)
+
+            # Criar DataFrame de ofensores
+            df_ofensor = pd.DataFrame({
+                'entidade': 'PCL',
+                'cnpj': df_dup['cnpj'],
+                'nome': df_dup['razao_social'].fillna(df_dup.get('nome_fantasia', 'N/A')),
+                'cidade': df_dup.get('cidade', ''),
+                'uf': df_dup.get('uf', ''),
+                'representante': df_dup.get('representante', ''),
+                'campo_problema': 'CNPJ',
+                'tipo_problema': df_dup['_contagem'].apply(lambda x: f'CNPJ duplicado ({x} ocorrências)'),
+                'valor_atual': df_dup['cnpj'],
+                'severidade': 'Crítico',
+                'severidade_ordem': 1
+            })
+            ofensores_list.append(df_ofensor)
 
     # Duplicados em Empresas
     if not df_empresas.empty and 'cnpj' in df_empresas.columns:
-        cnpjs_emp = df_empresas['cnpj'].dropna()
-        duplicados_emp = cnpjs_emp[cnpjs_emp.duplicated(keep=False)]
-        for cnpj in duplicados_emp.unique():
-            registros = df_empresas[df_empresas['cnpj'] == cnpj]
-            for idx, row in registros.iterrows():
-                ofensores.append({
-                    'entidade': 'Empresa',
-                    'cnpj': cnpj,
-                    'nome': row.get('razao_social', row.get('nome', 'N/A')),
-                    'cidade': row.get('cidade', ''),
-                    'uf': row.get('uf', ''),
-                    'representante': row.get('representante', ''),
-                    'campo_problema': 'CNPJ',
-                    'tipo_problema': f'CNPJ duplicado ({len(registros)} ocorrências)',
-                    'valor_atual': cnpj,
-                    'severidade': 'Crítico',
-                    'severidade_ordem': 1
-                })
+        contagem = df_empresas['cnpj'].value_counts()
+        cnpjs_duplicados = contagem[contagem > 1].index
 
-    return pd.DataFrame(ofensores)
+        if len(cnpjs_duplicados) > 0:
+            mask_dup = df_empresas['cnpj'].isin(cnpjs_duplicados)
+            df_dup = df_empresas[mask_dup].copy()
+            df_dup['_contagem'] = df_dup['cnpj'].map(contagem)
 
-def consolidar_ofensores(df_pcls, df_empresas):
+            nome_col = 'razao_social' if 'razao_social' in df_dup.columns else 'nome'
+            df_ofensor = pd.DataFrame({
+                'entidade': 'Empresa',
+                'cnpj': df_dup['cnpj'],
+                'nome': df_dup[nome_col] if nome_col in df_dup.columns else 'N/A',
+                'cidade': df_dup.get('cidade', ''),
+                'uf': df_dup.get('uf', ''),
+                'representante': df_dup.get('representante', ''),
+                'campo_problema': 'CNPJ',
+                'tipo_problema': df_dup['_contagem'].apply(lambda x: f'CNPJ duplicado ({x} ocorrências)'),
+                'valor_atual': df_dup['cnpj'],
+                'severidade': 'Crítico',
+                'severidade_ordem': 1
+            })
+            ofensores_list.append(df_ofensor)
+
+    if ofensores_list:
+        return pd.concat(ofensores_list, ignore_index=True)
+    return pd.DataFrame()
+
+def _calcular_ofensores_interno(df_pcls, df_empresas):
     """
-    ADD-961: Consolida todos os ofensores em um único DataFrame.
+    ADD-961: Calcula ofensores internamente (função auxiliar).
     """
     # Identificar ofensores de cada tipo
     ofensores_pcls = identificar_ofensores_pcls(df_pcls)
@@ -707,6 +567,22 @@ def consolidar_ofensores(df_pcls, df_empresas):
     )
 
     return df_consolidado
+
+def consolidar_ofensores(df_pcls, df_empresas):
+    """
+    ADD-961: Consolida todos os ofensores em um único DataFrame.
+    Usa session_state para evitar recálculo a cada interação.
+    """
+    # Criar hash baseado no tamanho dos dados
+    hash_atual = f"{len(df_pcls)}_{len(df_empresas)}"
+
+    # Verificar se já temos os dados em cache
+    if 'ofensores_hash' not in st.session_state or st.session_state.ofensores_hash != hash_atual:
+        # Calcular e armazenar em session_state
+        st.session_state.ofensores_df = _calcular_ofensores_interno(df_pcls, df_empresas)
+        st.session_state.ofensores_hash = hash_atual
+
+    return st.session_state.ofensores_df
 
 def calcular_metricas_qualidade(df_ofensores, total_pcls, total_empresas):
     """

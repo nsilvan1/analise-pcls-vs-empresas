@@ -568,6 +568,28 @@ def _calcular_ofensores_interno(df_pcls, df_empresas):
 
     return df_consolidado
 
+
+def get_normalized_city_data(df_labs, df_empresas):
+    """
+    Retorna DataFrames com cidades normalizadas, usando cache no session_state.
+    Evita recálculo a cada interação na aba Análises.
+    """
+    # Criar hash baseado no tamanho dos dados
+    hash_atual = f"cities_{len(df_labs)}_{len(df_empresas)}"
+
+    # Verificar se já temos os dados em cache
+    if 'normalized_cities_hash' not in st.session_state or st.session_state.normalized_cities_hash != hash_atual:
+        # Calcular e armazenar em session_state
+        df_labs_norm = normalize_city_column(df_labs.copy().reset_index(drop=True), 'cidade') if not df_labs.empty else pd.DataFrame()
+        df_empresas_norm = normalize_city_column(df_empresas.copy().reset_index(drop=True), 'cidade') if not df_empresas.empty else pd.DataFrame()
+
+        st.session_state.df_labs_norm = df_labs_norm
+        st.session_state.df_empresas_norm = df_empresas_norm
+        st.session_state.normalized_cities_hash = hash_atual
+
+    return st.session_state.df_labs_norm, st.session_state.df_empresas_norm
+
+
 def consolidar_ofensores(df_pcls, df_empresas):
     """
     ADD-961: Consolida todos os ofensores em um único DataFrame.
@@ -2510,6 +2532,9 @@ def _analises_especificas_fragment():
     """Conteúdo da aba Análises Específicas. Fragment para manter a aba ativa ao mudar filtros."""
     create_section_header("🔍", "Análises Específicas", "Consultas customizadas conforme demanda")
 
+    # Cache: Normalizar cidades uma única vez
+    df_labs_norm, df_empresas_norm = get_normalized_city_data(df_labs, df_empresas)
+
     analise_tipo = st.selectbox(
         "Selecione a análise",
         [
@@ -2527,11 +2552,7 @@ def _analises_especificas_fragment():
     if analise_tipo == "1. PCLs em cidades SEM Empresas credenciadas":
         st.markdown("**Descrição:** Lista de PCLs em cidades que não têm nenhuma empresa credenciada.")
 
-        if not df_labs.empty and not df_empresas.empty:
-            # Normalizar cidades antes de comparar
-            df_labs_norm = normalize_city_column(df_labs.copy().reset_index(drop=True), 'cidade')
-            df_empresas_norm = normalize_city_column(df_empresas.copy().reset_index(drop=True), 'cidade')
-
+        if not df_labs_norm.empty and not df_empresas_norm.empty:
             cidades_com_empresa = set(df_empresas_norm['cidade'].dropna().unique()) if 'cidade' in df_empresas_norm.columns else set()
             cidades_com_empresa = {c for c in cidades_com_empresa if c != ''}  # Remover strings vazias
 
@@ -2577,11 +2598,7 @@ def _analises_especificas_fragment():
     elif analise_tipo == "2. PCLs em cidades COM Empresas INATIVAS (365 dias)":
         st.markdown("**Descrição:** Lista de PCLs em cidades que têm empresas credenciadas, mas TODAS as empresas estão inativas (>365 dias sem voucher).")
 
-        if not df_labs.empty and not df_empresas.empty:
-            # Normalizar cidades antes de comparar
-            df_labs_norm = normalize_city_column(df_labs.copy().reset_index(drop=True), 'cidade')
-            df_empresas_norm = normalize_city_column(df_empresas.copy().reset_index(drop=True), 'cidade')
-
+        if not df_labs_norm.empty and not df_empresas_norm.empty:
             # Encontrar cidades onde TODAS as empresas são inativas
             if 'cidade' in df_empresas_norm.columns and 'status' in df_empresas_norm.columns:
                 empresas_por_cidade_analise = df_empresas_norm.groupby('cidade').agg({
@@ -2646,11 +2663,7 @@ def _analises_especificas_fragment():
     elif analise_tipo == "3. Empresas em cidades SEM PCL credenciado":
         st.markdown("**Descrição:** Lista de empresas em cidades que não têm nenhum PCL credenciado.")
 
-        if not df_labs.empty and not df_empresas.empty:
-            # Normalizar cidades antes de comparar
-            df_labs_norm = normalize_city_column(df_labs.copy().reset_index(drop=True), 'cidade')
-            df_empresas_norm = normalize_city_column(df_empresas.copy().reset_index(drop=True), 'cidade')
-
+        if not df_labs_norm.empty and not df_empresas_norm.empty:
             cidades_com_pcl = set(df_labs_norm['cidade'].dropna().unique()) if 'cidade' in df_labs_norm.columns else set()
             cidades_com_pcl = {c for c in cidades_com_pcl if c != ''}  # Remover strings vazias
 
@@ -2695,11 +2708,7 @@ def _analises_especificas_fragment():
     elif analise_tipo == "4. Empresas em cidades COM PCL INATIVO (90 dias)":
         st.markdown("**Descrição:** Lista de empresas em cidades que têm PCL credenciado, mas TODOS os PCLs estão inativos (>90 dias sem coleta).")
 
-        if not df_labs.empty and not df_empresas.empty:
-            # Normalizar cidades antes de comparar
-            df_labs_norm = normalize_city_column(df_labs.copy().reset_index(drop=True), 'cidade')
-            df_empresas_norm = normalize_city_column(df_empresas.copy().reset_index(drop=True), 'cidade')
-
+        if not df_labs_norm.empty and not df_empresas_norm.empty:
             # Encontrar cidades onde TODOS os PCLs são inativos
             if 'cidade' in df_labs_norm.columns and 'status' in df_labs_norm.columns:
                 pcls_por_cidade_analise = df_labs_norm.groupby('cidade').agg({

@@ -779,10 +779,12 @@ def create_bar_chart(df, x_col, y_col, title, max_items=12, color='#22C55E', sor
 
     return fig
 
-def create_grouped_bar_chart(df, x_col, title, colors=None, max_items=10):
+def create_grouped_bar_chart(df, x_col, title, colors=None, max_items=10, labels=None):
     """Cria gráfico de barras agrupadas"""
     if colors is None:
         colors = {'Ativo': '#22C55E', 'Inativo': '#EF4444'}
+    if labels is None:
+        labels = {'Ativo': 'Ativos', 'Inativo': 'Inativos'}
 
     try:
         df_chart = df.groupby([x_col, 'status']).size().reset_index(name='Quantidade')
@@ -810,32 +812,36 @@ def create_grouped_bar_chart(df, x_col, title, colors=None, max_items=10):
 
     if 'Ativo' in df_pivot.columns:
         valores_ativos = [float(x) if pd.notna(x) and np.isfinite(x) else 0.0 for x in df_pivot['Ativo']]
+        label_ativo = labels.get('Ativo', 'Ativos')
         fig.add_trace(go.Bar(
-            name='Ativos',
+            name=label_ativo,
             x=valores_ativos,
             y=df_pivot.index,
             orientation='h',
             marker=dict(color=colors.get('Ativo', '#22C55E')),
             text=[format_number(int(x)) for x in valores_ativos],
             textposition='outside',
-            hovertemplate='<b>%{y}</b><br>Ativos: %{x:,.0f}<extra></extra>'
+            hovertemplate=f'<b>%{{y}}</b><br>{label_ativo}: %{{x:,.0f}}<extra></extra>',
+            offsetgroup=0
         ))
 
     if 'Inativo' in df_pivot.columns:
         valores_inativos = [float(x) if pd.notna(x) and np.isfinite(x) else 0.0 for x in df_pivot['Inativo']]
+        label_inativo = labels.get('Inativo', 'Inativos')
         fig.add_trace(go.Bar(
-            name='Inativos',
+            name=label_inativo,
             x=valores_inativos,
             y=df_pivot.index,
             orientation='h',
             marker=dict(color=colors.get('Inativo', '#EF4444')),
             text=[format_number(int(x)) for x in valores_inativos],
             textposition='outside',
-            hovertemplate='<b>%{y}</b><br>Inativos: %{x:,.0f}<extra></extra>'
+            hovertemplate=f'<b>%{{y}}</b><br>{label_inativo}: %{{x:,.0f}}<extra></extra>',
+            offsetgroup=1
         ))
 
     num_items = len(df_pivot)
-    height = max(400, num_items * 40 + 100)
+    height = max(400, num_items * 60 + 100)  # Mais espaço para barras agrupadas
 
     fig.update_layout(
         title=dict(
@@ -860,17 +866,18 @@ def create_grouped_bar_chart(df, x_col, title, colors=None, max_items=10):
         plot_bgcolor='rgba(0,0,0,0)',
         paper_bgcolor='rgba(0,0,0,0)',
         height=height,
-        margin=dict(l=10, r=70, t=50, b=20),
+        margin=dict(l=10, r=70, t=50, b=50),
         legend=dict(
             orientation="h",
-            yanchor="bottom",
-            y=1.02,
+            yanchor="top",
+            y=-0.1,
             xanchor="center",
             x=0.5,
-            bgcolor='rgba(0,0,0,0)'
+            bgcolor='rgba(0,0,0,0)',
+            traceorder='normal'
         ),
-        bargap=0.3,
-        bargroupgap=0.1
+        bargap=0.15,
+        bargroupgap=0.05
     )
 
     return fig
@@ -3448,12 +3455,12 @@ with tab_visao_geral:
     
     with col1:
         if not df_labs.empty and 'uf' in df_labs.columns:
-            fig = create_grouped_bar_chart(df_labs, 'uf', "PCLs: Ativos vs Inativos", max_items=10)
+            fig = create_grouped_bar_chart(df_labs, 'uf', "PCLs por Estado", max_items=10)
             st.plotly_chart(fig, use_container_width=True)
-    
+
     with col2:
         if not df_empresas.empty and 'uf' in df_empresas.columns:
-            fig = create_grouped_bar_chart(df_empresas, 'uf', "Empresas: Ativas vs Inativas", max_items=10)
+            fig = create_grouped_bar_chart(df_empresas, 'uf', "Empresas por Estado", max_items=10, labels={'Ativo': 'Ativas', 'Inativo': 'Inativas'})
             st.plotly_chart(fig, use_container_width=True)
 
 with tab_visao_estado:

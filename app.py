@@ -1540,17 +1540,34 @@ def process_labs(df_labs):
 
     df = normalize_column_names(df_labs)
 
-    # EXCLUIR PCLs com "Ativo em Coletas" = False (não devem ser considerados)
-    if 'ativo em coletas' in df.columns:
+    # PASSO 1: FILTRAR pela coluna "Ativo (credenciado)" - EXCLUIR PCLs não credenciados
+    # A coluna pode estar como 'ativo (credenciado)' ou variações
+    credenciado_col = None
+    for col in df.columns:
+        if 'ativo' in col and 'credenciado' in col:
+            credenciado_col = col
+            break
+
+    if credenciado_col:
         total_antes = len(df)
-        # Filtrar apenas PCLs onde "Ativo em Coletas" é True
-        # Considerar True: True, 'true', 'True', 1, '1', 'sim', 'Sim', 'yes', 'Yes'
-        df = df[df['ativo em coletas'].apply(
+        df = df[df[credenciado_col].apply(
             lambda x: x == True or str(x).lower() in ['true', '1', 'sim', 'yes', 's', 'y']
         )]
-        pcls_excluidos_ativos = total_antes - len(df)
-        if pcls_excluidos_ativos > 0:
-            print(f"Excluídos {pcls_excluidos_ativos} PCLs com 'Ativo em Coletas' = False")
+        excluidos = total_antes - len(df)
+        print(f"[LOG PCLs] Coluna '{credenciado_col}' encontrada")
+        print(f"[LOG PCLs] Excluídos {excluidos} PCLs não credenciados ('{credenciado_col}' = False)")
+        print(f"[LOG PCLs] Restantes: {len(df)} PCLs credenciados")
+    else:
+        print(f"[LOG PCLs] AVISO: Coluna 'Ativo (credenciado)' não encontrada. Nenhum filtro aplicado.")
+
+    # PASSO 2: Identificar PCLs com "Ativo em Coletas" = False para marcar como Inativo
+    df['_inativo_em_coletas'] = False
+    if 'ativo em coletas' in df.columns:
+        df['_inativo_em_coletas'] = df['ativo em coletas'].apply(
+            lambda x: not (x == True or str(x).lower() in ['true', '1', 'sim', 'yes', 's', 'y'])
+        )
+        inativos_coletas = df['_inativo_em_coletas'].sum()
+        print(f"[LOG PCLs] PCLs com 'Ativo em Coletas' = False: {inativos_coletas}")
 
     # Formatar CNPJ com zeros à esquerda e pontuação
     if 'cnpj' in df.columns:
@@ -1571,18 +1588,34 @@ def process_labs(df_labs):
     else:
         df['acumulado_coletas'] = 0
     
-    # Usar coluna 'Ativo em Coletas' se existir (já vem do Excel)
-    # Agora todos os PCLs restantes devem ser considerados Ativos (já filtramos os False)
-    if 'ativo em coletas' in df.columns:
-        df['status'] = 'Ativo'  # Todos os PCLs restantes são ativos (já filtramos os False)
+    # Calcular status baseado em dias sem coleta (regra: <=90 dias = Ativo, >90 dias = Inativo)
+    # PCLs com "Ativo em Coletas" = False são sempre marcados como Inativo
+    # A coluna pode estar como 'dias_sem_coleta' (normalizada) ou 'dias sem coleta' (original)
+    dias_col = None
+    if 'dias_sem_coleta' in df.columns:
+        dias_col = 'dias_sem_coleta'
     elif 'dias sem coleta' in df.columns:
-        # Usar dias sem coleta
-        dias = pd.to_numeric(df['dias sem coleta'], errors='coerce').fillna(9999)
+        dias_col = 'dias sem coleta'
+
+    if dias_col:
+        dias = pd.to_numeric(df[dias_col], errors='coerce').fillna(9999)
         df['status'] = dias.apply(lambda x: 'Ativo' if x <= 90 else 'Inativo')
     else:
-        # Fallback: usar acumulado
+        # Fallback: usar acumulado (se não tem dias sem coleta, considera ativo se tem coletas)
         df['status'] = df['acumulado_coletas'].apply(lambda x: 'Ativo' if x > 0 else 'Inativo')
-    
+        print(f"[LOG PCLs] AVISO: Coluna 'dias sem coleta' não encontrada. Usando fallback por acumulado.")
+
+    # Marcar PCLs com "Ativo em Coletas" = False como Inativo (sobrescreve o status calculado acima)
+    if '_inativo_em_coletas' in df.columns:
+        df.loc[df['_inativo_em_coletas'] == True, 'status'] = 'Inativo'
+
+    # LOG: Contagem de PCLs por status
+    ativos = (df['status'] == 'Ativo').sum()
+    inativos = (df['status'] == 'Inativo').sum()
+    inativos_em_coletas = df['_inativo_em_coletas'].sum() if '_inativo_em_coletas' in df.columns else 0
+    inativos_por_dias = inativos - inativos_em_coletas
+    print(f"[LOG PCLs] Total: {len(df)} | Ativos: {ativos} | Inativos: {inativos} (por 'Ativo em Coletas'=False: {inativos_em_coletas}, por >90 dias: {inativos_por_dias})")
+
     # Coletas do ano
     if 'coletas_2025' in df.columns:
         df['acumulado_coletas_ano'] = pd.to_numeric(df['coletas_2025'], errors='coerce').fillna(0)

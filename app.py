@@ -744,7 +744,8 @@ def create_bar_chart(df, x_col, y_col, title, max_items=12, color='#22C55E', sor
             line=dict(width=0)
         ),
         text=[format_number(x) for x in valores_x],
-        textposition='outside',
+        textposition='auto', insidetextanchor='middle',
+        textfont=dict(color='white'),
         hovertemplate=f'<b>%{{y}}</b><br>{y_col}: %{{x:,.0f}}<extra></extra>'
     ))
 
@@ -820,9 +821,11 @@ def create_grouped_bar_chart(df, x_col, title, colors=None, max_items=10, labels
             orientation='h',
             marker=dict(color=colors.get('Ativo', '#22C55E')),
             text=[format_number(int(x)) for x in valores_ativos],
-            textposition='outside',
+            textposition='auto', insidetextanchor='middle',
+            textfont=dict(color='white'),
+            outsidetextfont=dict(color='#22C55E'),
             hovertemplate=f'<b>%{{y}}</b><br>{label_ativo}: %{{x:,.0f}}<extra></extra>',
-            offsetgroup=0
+            offsetgroup=1
         ))
 
     if 'Inativo' in df_pivot.columns:
@@ -835,9 +838,11 @@ def create_grouped_bar_chart(df, x_col, title, colors=None, max_items=10, labels
             orientation='h',
             marker=dict(color=colors.get('Inativo', '#EF4444')),
             text=[format_number(int(x)) for x in valores_inativos],
-            textposition='outside',
+            textposition='auto', insidetextanchor='middle',
+            textfont=dict(color='white'),
+            outsidetextfont=dict(color='#EF4444'),
             hovertemplate=f'<b>%{{y}}</b><br>{label_inativo}: %{{x:,.0f}}<extra></extra>',
-            offsetgroup=1
+            offsetgroup=0
         ))
 
     num_items = len(df_pivot)
@@ -929,7 +934,8 @@ def create_top_list_card(title, data_dict, color="#22C55E"):
             orientation='h',
             marker=dict(color=color),
             text=[format_number(int(x)) for x in valores],
-            textposition='outside'
+            textposition='auto', insidetextanchor='middle',
+            textfont=dict(color='white')
         ))
 
         fig.update_layout(
@@ -2166,7 +2172,8 @@ def _analise_coletas_fragment():
                     orientation='h',
                     marker=dict(color='#22C55E'),
                     text=[format_number(int(x)) for x in valores_x],
-                    textposition='outside'
+                    textposition='auto', insidetextanchor='middle',
+                    textfont=dict(color='white')
                 ))
 
                 fig.update_layout(
@@ -2194,7 +2201,8 @@ def _analise_coletas_fragment():
                     orientation='h',
                     marker=dict(color='#3B82F6'),
                     text=[f"{x:.1f}" for x in valores_x],
-                    textposition='outside'
+                    textposition='auto', insidetextanchor='middle',
+                    textfont=dict(color='white')
                 ))
 
                 fig.update_layout(

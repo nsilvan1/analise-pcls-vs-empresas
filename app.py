@@ -1550,15 +1550,28 @@ def process_labs(df_labs):
 
     if credenciado_col:
         total_antes = len(df)
-        df = df[df[credenciado_col].apply(
+
+        # Identificar credenciados e descredenciados
+        mask_credenciado = df[credenciado_col].apply(
             lambda x: x == True or str(x).lower() in ['true', '1', 'sim', 'yes', 's', 'y']
-        )]
+        )
+
+        # Salvar descredenciados no session_state para exibir na Visão Geral
+        df_descredenciados = df[~mask_credenciado].copy()
+        st.session_state['pcls_descredenciados'] = df_descredenciados
+        st.session_state['total_pcls_planilha'] = total_antes
+
+        # Filtrar apenas credenciados
+        df = df[mask_credenciado]
         excluidos = total_antes - len(df)
+
         print(f"[LOG PCLs] Coluna '{credenciado_col}' encontrada")
         print(f"[LOG PCLs] Excluídos {excluidos} PCLs não credenciados ('{credenciado_col}' = False)")
         print(f"[LOG PCLs] Restantes: {len(df)} PCLs credenciados")
     else:
         print(f"[LOG PCLs] AVISO: Coluna 'Ativo (credenciado)' não encontrada. Nenhum filtro aplicado.")
+        st.session_state['pcls_descredenciados'] = pd.DataFrame()
+        st.session_state['total_pcls_planilha'] = len(df)
 
     # PASSO 2: Identificar PCLs com "Ativo em Coletas" = False para marcar como Inativo
     df['_inativo_em_coletas'] = False
@@ -3282,9 +3295,62 @@ with tab_visao_geral:
         create_metric_card("Total Empresas", format_number(total_empresas), f"{pct_empresas_ativas:.1f}% ativas", f"↗ {format_number(empresas_ativas)} ativas", "green")
     with col4:
         create_metric_card("Empresas Inativas", format_number(empresas_inativas), "Sem uso há +365 dias", "", "gray")
-    
+
+    # Expander com PCLs Descredenciados
+    df_descredenciados = st.session_state.get('pcls_descredenciados', pd.DataFrame())
+    total_planilha = st.session_state.get('total_pcls_planilha', total_pcls)
+
+    if not df_descredenciados.empty:
+        with st.expander(f"ℹ️ Ver PCLs Descredenciados ({len(df_descredenciados)})", expanded=False):
+            st.markdown(f"""
+            <div style="background: #1E293B; padding: 12px; border-radius: 8px; margin-bottom: 12px;">
+                <span style="color: #94A3B8;">Total na planilha:</span> <strong style="color: white;">{format_number(total_planilha)}</strong> &nbsp;|&nbsp;
+                <span style="color: #94A3B8;">Credenciados:</span> <strong style="color: #22C55E;">{format_number(total_pcls)}</strong> &nbsp;|&nbsp;
+                <span style="color: #94A3B8;">Descredenciados:</span> <strong style="color: #EF4444;">{format_number(len(df_descredenciados))}</strong>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # Selecionar colunas para exibição
+            colunas_exibir = []
+            for col in ['cnpj', 'razão social', 'razao_social', 'nome fantasia', 'nome_fantasia', 'cidade', 'uf', 'estado', 'representante']:
+                if col in df_descredenciados.columns:
+                    colunas_exibir.append(col)
+
+            if colunas_exibir:
+                df_exibir = df_descredenciados[colunas_exibir].copy()
+            else:
+                df_exibir = df_descredenciados.copy()
+
+            # Renomear colunas para exibição
+            rename_map = {
+                'razão social': 'Razão Social',
+                'razao_social': 'Razão Social',
+                'nome fantasia': 'Nome Fantasia',
+                'nome_fantasia': 'Nome Fantasia',
+                'cnpj': 'CNPJ',
+                'cidade': 'Cidade',
+                'uf': 'UF',
+                'estado': 'Estado',
+                'representante': 'Representante'
+            }
+            df_exibir = df_exibir.rename(columns={k: v for k, v in rename_map.items() if k in df_exibir.columns})
+
+            st.dataframe(df_exibir, use_container_width=True, height=300)
+
+            # Botão de download
+            output = BytesIO()
+            df_descredenciados.to_excel(output, index=False, engine='openpyxl')
+            output.seek(0)
+
+            st.download_button(
+                label="📥 Download Excel - PCLs Descredenciados",
+                data=output,
+                file_name="pcls_descredenciados.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+
     st.markdown("")
-    
+
     # Linha 2: Volumes
     col1, col2, col3, col4 = st.columns(4)
     
@@ -3453,9 +3519,42 @@ with tab_ajuda:
         
         st.markdown("""
         **Critérios de classificação:**
-        - **PCLs descredenciados** (campo técnico "Ativo em Coletas" = False) são **excluídos** antes de qualquer análise
-        - Para os PCLs restantes, se a coluna "Ativo em Coletas" existir no Excel, apenas PCLs com valor **True** são considerados
-        - Se a coluna "Ativo em Coletas" não existir, usa-se "Dias sem coleta": ≤ 90 dias = Ativo, > 90 dias = Inativo
+        - **PCLs descredenciados** (coluna "Ativo (credenciado)" = Falso) são **excluídos** antes de qualquer análise
+        - Para os PCLs restantes, usa-se "Dias sem coleta": ≤ 90 dias = Ativo, > 90 dias = Inativo
+        """)
+
+        st.markdown("### Como interpretar os números da Visão Geral?")
+        st.info("""
+        **Entendendo a estrutura dos dados:**
+
+        A planilha Excel contém **todos** os PCLs (credenciados + descredenciados). O dashboard exibe apenas os **credenciados**.
+        """)
+
+        st.markdown("""
+        | Informação | Significado |
+        |------------|-------------|
+        | **Total na planilha** | Todos os registros no Excel (antes de qualquer filtro) |
+        | **Credenciados** | PCLs com `Ativo (credenciado) = Verdadeiro` → exibidos no dashboard |
+        | **Descredenciados** | PCLs com `Ativo (credenciado) = Falso` → ocultos do dashboard |
+        | **Total PCLs** | = Credenciados (é o número exibido nos cards) |
+        | **PCLs Ativos** | Credenciados que fizeram coleta nos últimos **90 dias** |
+        | **PCLs Inativos** | Credenciados **sem coleta há mais de 90 dias** |
+        """)
+
+        st.markdown("**Validação matemática:**")
+        st.code("""
+Total na planilha = Credenciados + Descredenciados
+
+Total PCLs (card) = PCLs Ativos + PCLs Inativos
+        """)
+
+        st.markdown("**Estrutura visual:**")
+        st.code("""
+Planilha Excel (Total na planilha)
+├── Descredenciados ──→ Ocultos (ver no expander "PCLs Descredenciados")
+└── Credenciados ──→ Exibidos como "Total PCLs"
+    ├── Ativos ──→ Coleta ≤ 90 dias
+    └── Inativos ──→ Coleta > 90 dias
         """)
 
         st.markdown("### Qual a diferença entre Empresa Ativa e Inativa?")

@@ -746,6 +746,7 @@ def create_bar_chart(df, x_col, y_col, title, max_items=12, color='#22C55E', sor
         text=[format_number(x) for x in valores_x],
         textposition='auto', insidetextanchor='middle',
         textfont=dict(color='white'),
+        outsidetextfont=dict(color=color),
         hovertemplate=f'<b>%{{y}}</b><br>{y_col}: %{{x:,.0f}}<extra></extra>'
     ))
 
@@ -935,7 +936,8 @@ def create_top_list_card(title, data_dict, color="#22C55E"):
             marker=dict(color=color),
             text=[format_number(int(x)) for x in valores],
             textposition='auto', insidetextanchor='middle',
-            textfont=dict(color='white')
+            textfont=dict(color='white'),
+            outsidetextfont=dict(color=color)
         ))
 
         fig.update_layout(
@@ -2173,7 +2175,8 @@ def _analise_coletas_fragment():
                     marker=dict(color='#22C55E'),
                     text=[format_number(int(x)) for x in valores_x],
                     textposition='auto', insidetextanchor='middle',
-                    textfont=dict(color='white')
+                    textfont=dict(color='white'),
+                    outsidetextfont=dict(color='#22C55E')
                 ))
 
                 fig.update_layout(
@@ -2202,7 +2205,8 @@ def _analise_coletas_fragment():
                     marker=dict(color='#3B82F6'),
                     text=[f"{x:.1f}" for x in valores_x],
                     textposition='auto', insidetextanchor='middle',
-                    textfont=dict(color='white')
+                    textfont=dict(color='white'),
+                    outsidetextfont=dict(color='#3B82F6')
                 ))
 
                 fig.update_layout(

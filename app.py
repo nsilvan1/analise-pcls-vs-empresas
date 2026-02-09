@@ -1227,6 +1227,8 @@ def load_data():
     labs_data = None
     empresas_file = None
     labs_file = None
+    empresas_date = None
+    labs_date = None
     errors = []
     
     def read_excel_safe(file_path):
@@ -1367,11 +1369,39 @@ def load_data():
         else:
             labs_source = "local"
     
+    # Datas de modificação dos arquivos
+    empresas_modified = None
+    labs_modified = None
+
+    if empresas_source == "sharepoint" and empresas_date:
+        try:
+            empresas_modified = pd.to_datetime(empresas_date)
+        except:
+            empresas_modified = None
+    elif empresas_source == "local" and isinstance(empresas_file, Path):
+        try:
+            empresas_modified = pd.to_datetime(datetime.fromtimestamp(empresas_file.stat().st_mtime))
+        except:
+            empresas_modified = None
+
+    if labs_source == "sharepoint" and labs_date:
+        try:
+            labs_modified = pd.to_datetime(labs_date)
+        except:
+            labs_modified = None
+    elif labs_source == "local" and isinstance(labs_file, Path):
+        try:
+            labs_modified = pd.to_datetime(datetime.fromtimestamp(labs_file.stat().st_mtime))
+        except:
+            labs_modified = None
+
     file_info = {
         'empresas_file': str(empresas_file.name) if empresas_file and hasattr(empresas_file, 'name') else None,
         'labs_file': str(labs_file.name) if labs_file and hasattr(labs_file, 'name') else None,
         'empresas_source': empresas_source,
         'labs_source': labs_source,
+        'empresas_modified': empresas_modified,
+        'labs_modified': labs_modified,
     }
     
     return df_empresas, df_labs, errors, file_info
@@ -4214,10 +4244,13 @@ Planilha Excel (Total na planilha)
         col_pcl, col_emp = st.columns(2)
 
         with col_pcl:
-            st.markdown("**PCLs (Laboratórios)**")
+            st.markdown("**PCLs (Laboratorios)**")
             if file_info.get('labs_file'):
                 icon = "☁️" if file_info.get('labs_source') == 'sharepoint' else "💻"
                 st.success(f"{icon} {file_info['labs_file']}")
+                labs_mod = file_info.get('labs_modified')
+                if labs_mod is not None:
+                    st.caption(f"Ultima atualizacao: {labs_mod.strftime('%d/%m/%Y %H:%M')}")
             else:
                 st.warning("Nenhum arquivo carregado")
 
@@ -4226,6 +4259,9 @@ Planilha Excel (Total na planilha)
             if file_info.get('empresas_file'):
                 icon = "☁️" if file_info.get('empresas_source') == 'sharepoint' else "💻"
                 st.success(f"{icon} {file_info['empresas_file']}")
+                emp_mod = file_info.get('empresas_modified')
+                if emp_mod is not None:
+                    st.caption(f"Ultima atualizacao: {emp_mod.strftime('%d/%m/%Y %H:%M')}")
             else:
                 st.warning("Nenhum arquivo carregado")
 

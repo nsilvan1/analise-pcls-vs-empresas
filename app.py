@@ -395,6 +395,21 @@ def identificar_ofensores_pcls(df_pcls):
         mask_transp = _campo_vazio(df['transportadora']) | (df['transportadora'].astype(str).str.lower() == 'não cadastrado')
         add_ofensores(mask_transp, 'Transportadora', 'Sem transportadora na matriz logística', 'Médio', 3)
 
+    # E-mail vazio em PCL ativo (Médio)
+    if 'email' in df.columns and 'status' in df.columns:
+        mask_email = _campo_vazio(df['email']) & (df['status'] == 'Ativo')
+        add_ofensores(mask_email, 'E-mail', 'E-mail vazio (PCL ativo)', 'Médio', 3)
+
+    # Telefone vazio em PCL ativo (Médio)
+    if 'telefone' in df.columns and 'status' in df.columns:
+        mask_tel = _campo_vazio(df['telefone']) & (df['status'] == 'Ativo')
+        add_ofensores(mask_tel, 'Telefone', 'Telefone vazio (PCL ativo)', 'Médio', 3)
+
+    # Valor total da coleta zerado em PCL ativo (Alto)
+    if 'valor_total_coleta' in df.columns and 'status' in df.columns:
+        mask_valor = (df['valor_total_coleta'].fillna(0) == 0) & (df['status'] == 'Ativo')
+        add_ofensores(mask_valor, 'Valor Coleta', 'Valor total da coleta zerado (PCL ativo)', 'Alto', 2)
+
     if ofensores_list:
         return pd.concat(ofensores_list, ignore_index=True)
     return pd.DataFrame()
@@ -1413,6 +1428,66 @@ def normalize_column_names(df):
         'acumulado de coletas': 'acumulado_coletas',
         'total de coletas 2024': 'coletas_2024',
         'total de coletas 2025': 'coletas_2025',
+        # Contato
+        'email': 'email',
+        'e-mail': 'email',
+        'email financeiro': 'email_financeiro',
+        'e-mail financeiro': 'email_financeiro',
+        'telefone': 'telefone',
+        # Temporal
+        'ano-mês credenciamento': 'ano_mes_credenciamento',
+        'ano-mes credenciamento': 'ano_mes_credenciamento',
+        'ano-mês última coleta': 'ano_mes_ultima_coleta',
+        'ano-mes ultima coleta': 'ano_mes_ultima_coleta',
+        # Histórico
+        'total de coletas 2023': 'coletas_2023',
+        # Dias desde credenciamento
+        'dias desde o credenciamento': 'dias_desde_credenciamento',
+        # Capacidade
+        'volume máximo de coletas 2023': 'volume_maximo_coletas_2023',
+        'volume maximo de coletas 2023': 'volume_maximo_coletas_2023',
+        'volume máximo de coletas 2024': 'volume_maximo_coletas_2024',
+        'volume maximo de coletas 2024': 'volume_maximo_coletas_2024',
+        'volume máximo de coletas 2025': 'volume_maximo_coletas_2025',
+        'volume maximo de coletas 2025': 'volume_maximo_coletas_2025',
+        # Comercial
+        'status crm': 'status_crm',
+        'status voucher': 'status_voucher',
+        # Finalidade - Totais
+        'cnh': 'finalidade_cnh',
+        'clt': 'finalidade_clt',
+        'outro': 'finalidade_outro',
+        'concurso público': 'finalidade_concurso_publico',
+        'concurso publico': 'finalidade_concurso_publico',
+        # Finalidade - Detalhado
+        'cnh - fe': 'cnh_fe',
+        'cnh - fc': 'cnh_fc',
+        'clt - fe': 'clt_fe',
+        'clt - fc': 'clt_fc',
+        # Financeiro
+        'valor total da coleta': 'valor_total_coleta',
+        # Fiscal
+        'simples nacional': 'simples_nacional',
+        'é cnpj de paulinia': 'cnpj_paulinia',
+        'e cnpj de paulinia': 'cnpj_paulinia',
+        # Formas de Pagamento
+        'dinheiro': 'pag_dinheiro',
+        'crédito': 'pag_credito',
+        'credito': 'pag_credito',
+        'débito': 'pag_debito',
+        'debito': 'pag_debito',
+        'boleto bancário': 'pag_boleto',
+        'boleto bancario': 'pag_boleto',
+        'faturamento': 'pag_faturamento',
+        'faturamento da empresa': 'pag_faturamento_empresa',
+        'faturamento do laboratório': 'pag_faturamento_laboratorio',
+        'faturamento do laboratorio': 'pag_faturamento_laboratorio',
+        'crédito online': 'pag_credito_online',
+        'credito online': 'pag_credito_online',
+        # Dados Mensais
+        'novembro/2025': 'coletas_nov_2025',
+        'dezembro/2025': 'coletas_dez_2025',
+        'janeiro/2026': 'coletas_jan_2026',
     }
     
     # Aplicar mapeamento direto
@@ -1637,6 +1712,20 @@ def process_labs(df_labs):
         df['acumulado_coletas'] = pd.to_numeric(df['acumulado_coletas'], errors='coerce').fillna(0)
     else:
         df['acumulado_coletas'] = 0
+
+    # Garantir que novas colunas numéricas sejam numéricas
+    colunas_numericas_novas = [
+        'coletas_2023',
+        'volume_maximo_coletas_2023', 'volume_maximo_coletas_2024', 'volume_maximo_coletas_2025',
+        'finalidade_cnh', 'finalidade_clt', 'finalidade_outro', 'finalidade_concurso_publico',
+        'cnh_fe', 'cnh_fc', 'clt_fe', 'clt_fc',
+        'valor_total_coleta',
+        'coletas_nov_2025', 'coletas_dez_2025', 'coletas_jan_2026',
+        'dias_desde_credenciamento',
+    ]
+    for col in colunas_numericas_novas:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
     
     # Calcular status baseado em dias sem coleta (regra: <=90 dias = Ativo, >90 dias = Inativo)
     # PCLs com "Ativo em Coletas" = False são sempre marcados como Inativo
@@ -2146,6 +2235,37 @@ def _analise_coletas_fragment():
             pct_com_coleta = (pcls_com_coleta / len(df_labs_coletas) * 100) if len(df_labs_coletas) > 0 else 0
             create_metric_card("PCLs com Coleta", format_number(pcls_com_coleta), f"{pct_com_coleta:.1f}% do total", "", "gray")
 
+        # Tendência Mensal e Capacidade
+        colunas_mensais = {
+            'coletas_2023': 'Coletas 2023',
+            'coletas_nov_2025': 'Nov/2025',
+            'coletas_dez_2025': 'Dez/2025',
+            'coletas_jan_2026': 'Jan/2026',
+        }
+        colunas_mensais_existentes = {k: v for k, v in colunas_mensais.items() if k in df_labs_coletas.columns}
+        if colunas_mensais_existentes:
+            st.markdown("---")
+            create_section_header("📅", "Tendencia Mensal")
+            cols_mensal = st.columns(len(colunas_mensais_existentes))
+            for i, (col_name, label) in enumerate(colunas_mensais_existentes.items()):
+                with cols_mensal[i]:
+                    val = int(df_labs_coletas[col_name].sum())
+                    create_metric_card(label, format_number(val), "", "", "gray")
+
+        # Capacidade vs Realizado
+        if 'volume_maximo_coletas_2025' in df_labs_coletas.columns and 'coletas_2025' in df_labs_coletas.columns:
+            st.markdown("---")
+            create_section_header("📈", "Capacidade vs Realizado 2025")
+            col1, col2, col3 = st.columns(3)
+            cap_total = int(df_labs_coletas['volume_maximo_coletas_2025'].sum())
+            real_total = int(df_labs_coletas['coletas_2025'].sum())
+            with col1:
+                create_metric_card("Capacidade Total", format_number(cap_total), "Volume maximo 2025", "", "gray")
+            with col2:
+                create_metric_card("Realizado", format_number(real_total), "Coletas 2025", "", "gray")
+            with col3:
+                create_progress_card("Utilizacao", real_total, cap_total, "#8B5CF6")
+
         st.markdown("---")
 
         # Coletas por Estado
@@ -2342,6 +2462,29 @@ def _listagem_pcls_fragment():
         else:
             df_display['dias_sem_coleta'] = None
 
+        # Seletor de colunas adicionais
+        grupos_colunas_extras = {
+            "Contato": ['email', 'email_financeiro', 'telefone'],
+            "Comercial": ['status_crm', 'status_voucher'],
+            "Capacidade": ['volume_maximo_coletas_2023', 'volume_maximo_coletas_2024', 'volume_maximo_coletas_2025'],
+            "Finalidade": ['finalidade_cnh', 'finalidade_clt', 'finalidade_outro', 'finalidade_concurso_publico'],
+            "Finalidade Detalhado": ['cnh_fe', 'cnh_fc', 'clt_fe', 'clt_fc'],
+            "Financeiro/Fiscal": ['valor_total_coleta', 'simples_nacional', 'cnpj_paulinia'],
+            "Formas de Pagamento": ['pag_dinheiro', 'pag_credito', 'pag_debito', 'pag_boleto', 'pag_faturamento', 'pag_faturamento_empresa', 'pag_faturamento_laboratorio', 'pag_credito_online'],
+            "Historico/Mensal": ['coletas_2023', 'coletas_nov_2025', 'coletas_dez_2025', 'coletas_jan_2026'],
+        }
+
+        grupos_selecionados = st.multiselect(
+            "Colunas adicionais",
+            list(grupos_colunas_extras.keys()),
+            default=[],
+            key="pcl_colunas_extras"
+        )
+
+        colunas_extras = []
+        for grupo in grupos_selecionados:
+            colunas_extras.extend(grupos_colunas_extras[grupo])
+
         # Preparar DataFrame para exibição
         colunas_pcl = [
             'cnpj', 'razao_social', 'nome_fantasia', 'endereco_logradouro', 'bairro', 'cidade', 'uf', 'cep',
@@ -2349,7 +2492,7 @@ def _listagem_pcls_fragment():
             'acumulado_coletas', 'acumulado_coletas_ano', 'data_ultima_coleta', 'dias_sem_coleta', 'status',
             'transportadora', 'frequencia',
             'qtd_empresas_cidade'
-        ]
+        ] + [c for c in colunas_extras if c in df_display.columns]
 
         rename_map_pcl = {
             'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'nome_fantasia': 'Nome Fantasia',
@@ -2359,7 +2502,22 @@ def _listagem_pcls_fragment():
             'acumulado_coletas': 'Coletas Total', 'acumulado_coletas_ano': 'Coletas 2025',
             'data_ultima_coleta': 'Última Coleta', 'dias_sem_coleta': 'Dias s/ Coleta', 'status': 'Status',
             'transportadora': 'Transportadora', 'frequencia': 'Frequência',
-            'qtd_empresas_cidade': 'Empresas na Cidade'
+            'qtd_empresas_cidade': 'Empresas na Cidade',
+            # Colunas extras
+            'email': 'E-mail', 'email_financeiro': 'E-mail Financeiro', 'telefone': 'Telefone',
+            'status_crm': 'Status CRM', 'status_voucher': 'Status Voucher',
+            'volume_maximo_coletas_2023': 'Vol. Max. 2023', 'volume_maximo_coletas_2024': 'Vol. Max. 2024',
+            'volume_maximo_coletas_2025': 'Vol. Max. 2025',
+            'finalidade_cnh': 'CNH', 'finalidade_clt': 'CLT',
+            'finalidade_outro': 'Outro', 'finalidade_concurso_publico': 'Concurso Publico',
+            'cnh_fe': 'CNH-FE', 'cnh_fc': 'CNH-FC', 'clt_fe': 'CLT-FE', 'clt_fc': 'CLT-FC',
+            'valor_total_coleta': 'Valor Coleta', 'simples_nacional': 'Simples Nacional', 'cnpj_paulinia': 'CNPJ Paulinia',
+            'pag_dinheiro': 'Dinheiro', 'pag_credito': 'Credito', 'pag_debito': 'Debito',
+            'pag_boleto': 'Boleto', 'pag_faturamento': 'Faturamento',
+            'pag_faturamento_empresa': 'Fat. Empresa', 'pag_faturamento_laboratorio': 'Fat. Laboratorio',
+            'pag_credito_online': 'Credito Online',
+            'coletas_2023': 'Coletas 2023',
+            'coletas_nov_2025': 'Nov/2025', 'coletas_dez_2025': 'Dez/2025', 'coletas_jan_2026': 'Jan/2026',
         }
 
         df_final = prepare_display_dataframe(df_display, colunas_pcl, rename_map_pcl)
@@ -2369,11 +2527,20 @@ def _listagem_pcls_fragment():
         else:
             st.warning("Nenhum dado disponível para exibição.")
 
-        # Download - ADD-956: incluir campos logísticos (transportadora, frequência)
+        # Download - inclui todas as colunas (originais + novas)
         colunas_download_pcl = [
             'cnpj', 'razao_social', 'nome_fantasia', 'endereco_logradouro', 'bairro', 'cidade', 'uf', 'cep',
+            'email', 'email_financeiro', 'telefone',
             'data_credenciamento', 'representante',
-            'acumulado_coletas', 'acumulado_coletas_ano', 'data_ultima_coleta', 'dias_sem_coleta', 'status',
+            'acumulado_coletas', 'acumulado_coletas_ano', 'coletas_2023', 'data_ultima_coleta', 'dias_sem_coleta', 'status',
+            'volume_maximo_coletas_2023', 'volume_maximo_coletas_2024', 'volume_maximo_coletas_2025',
+            'status_crm', 'status_voucher',
+            'finalidade_cnh', 'finalidade_clt', 'finalidade_outro', 'finalidade_concurso_publico',
+            'cnh_fe', 'cnh_fc', 'clt_fe', 'clt_fc',
+            'valor_total_coleta', 'simples_nacional', 'cnpj_paulinia',
+            'pag_dinheiro', 'pag_credito', 'pag_debito', 'pag_boleto', 'pag_faturamento',
+            'pag_faturamento_empresa', 'pag_faturamento_laboratorio', 'pag_credito_online',
+            'coletas_nov_2025', 'coletas_dez_2025', 'coletas_jan_2026',
             'transportadora', 'frequencia',
             'qtd_empresas_cidade', 'qtd_empresas_ativas_cidade', 'qtd_empresas_inativas_cidade', 'qtd_empresas_usaram_voucher'
         ]
@@ -2382,9 +2549,23 @@ def _listagem_pcls_fragment():
             'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'nome_fantasia': 'Nome Fantasia',
             'endereco_logradouro': 'Endereço', 'bairro': 'Bairro',
             'cidade': 'Cidade', 'uf': 'UF', 'cep': 'CEP',
+            'email': 'E-mail', 'email_financeiro': 'E-mail Financeiro', 'telefone': 'Telefone',
             'data_credenciamento': 'Data Credenciamento', 'representante': 'Representante',
             'acumulado_coletas': 'Coletas Total', 'acumulado_coletas_ano': 'Coletas 2025',
+            'coletas_2023': 'Coletas 2023',
             'data_ultima_coleta': 'Última Coleta', 'dias_sem_coleta': 'Dias s/ Coleta', 'status': 'Status',
+            'volume_maximo_coletas_2023': 'Vol. Max. 2023', 'volume_maximo_coletas_2024': 'Vol. Max. 2024',
+            'volume_maximo_coletas_2025': 'Vol. Max. 2025',
+            'status_crm': 'Status CRM', 'status_voucher': 'Status Voucher',
+            'finalidade_cnh': 'CNH', 'finalidade_clt': 'CLT',
+            'finalidade_outro': 'Outro', 'finalidade_concurso_publico': 'Concurso Publico',
+            'cnh_fe': 'CNH-FE', 'cnh_fc': 'CNH-FC', 'clt_fe': 'CLT-FE', 'clt_fc': 'CLT-FC',
+            'valor_total_coleta': 'Valor Coleta', 'simples_nacional': 'Simples Nacional', 'cnpj_paulinia': 'CNPJ Paulinia',
+            'pag_dinheiro': 'Dinheiro', 'pag_credito': 'Credito', 'pag_debito': 'Debito',
+            'pag_boleto': 'Boleto', 'pag_faturamento': 'Faturamento',
+            'pag_faturamento_empresa': 'Fat. Empresa', 'pag_faturamento_laboratorio': 'Fat. Laboratorio',
+            'pag_credito_online': 'Credito Online',
+            'coletas_nov_2025': 'Nov/2025', 'coletas_dez_2025': 'Dez/2025', 'coletas_jan_2026': 'Jan/2026',
             'transportadora': 'Transportadora', 'frequencia': 'Frequência',
             'qtd_empresas_cidade': 'Empresas na Cidade', 'qtd_empresas_ativas_cidade': 'Empresas Ativas',
             'qtd_empresas_inativas_cidade': 'Empresas Inativas', 'qtd_empresas_usaram_voucher': 'Empresas c/ Voucher'
@@ -2563,7 +2744,10 @@ def _analises_especificas_fragment():
             "4. Empresas em cidades COM PCL INATIVO (90 dias)",
             "Top PCLs por volume de coletas",
             "Estados com menor cobertura",
-            "Acompanhamento por Representante"
+            "Acompanhamento por Representante",
+            "PCLs sem coleta recente (3 meses)",
+            "PCLs com capacidade ociosa",
+            "Distribuicao por Finalidade"
         ]
     )
 
@@ -3039,6 +3223,142 @@ def _analises_especificas_fragment():
                 else:
                     st.info("Nenhum dado para exibir no resumo.")
 
+    # Análise 8: PCLs sem coleta recente (3 meses)
+    elif analise_tipo == "PCLs sem coleta recente (3 meses)":
+        st.markdown("**Descricao:** PCLs que nao realizaram nenhuma coleta nos ultimos 3 meses disponiveis.")
+
+        colunas_meses = ['coletas_nov_2025', 'coletas_dez_2025', 'coletas_jan_2026']
+        colunas_existentes = [c for c in colunas_meses if c in df_labs.columns]
+
+        if not colunas_existentes:
+            st.warning("Dados mensais nao disponiveis no arquivo atual.")
+        else:
+            # PCLs onde todos os meses disponíveis = 0
+            mask = pd.Series(True, index=df_labs.index)
+            for col in colunas_existentes:
+                mask = mask & (df_labs[col].fillna(0) == 0)
+
+            df_result = df_labs[mask].copy()
+
+            if not df_result.empty:
+                st.success(f"Encontrados {len(df_result)} PCLs sem coleta nos ultimos meses")
+
+                cols = ['cnpj', 'razao_social', 'cidade', 'uf', 'representante', 'email', 'telefone',
+                        'status', 'acumulado_coletas', 'data_ultima_coleta', 'dias_sem_coleta'] + colunas_existentes
+                cols_available = [c for c in cols if c in df_result.columns]
+                df_display = df_result[cols_available].copy()
+
+                rename_map = {
+                    'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'cidade': 'Cidade', 'uf': 'UF',
+                    'representante': 'Representante', 'email': 'E-mail', 'telefone': 'Telefone',
+                    'status': 'Status', 'acumulado_coletas': 'Coletas Total',
+                    'data_ultima_coleta': 'Ultima Coleta', 'dias_sem_coleta': 'Dias s/ Coleta',
+                    'coletas_nov_2025': 'Nov/2025', 'coletas_dez_2025': 'Dez/2025', 'coletas_jan_2026': 'Jan/2026'
+                }
+                df_display = df_display.rename(columns={k: v for k, v in rename_map.items() if k in df_display.columns})
+                st.dataframe(df_display, use_container_width=True, hide_index=True, height=500)
+
+                output = BytesIO()
+                with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                    df_display.to_excel(writer, index=False, sheet_name='PCLs sem Coleta')
+                st.download_button(
+                    "Download Excel",
+                    output.getvalue(),
+                    f'pcls_sem_coleta_recente_{datetime.now().strftime("%Y%m%d")}.xlsx',
+                    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                )
+            else:
+                st.info("Todos os PCLs realizaram coletas nos ultimos meses.")
+
+    # Análise 9: PCLs com capacidade ociosa
+    elif analise_tipo == "PCLs com capacidade ociosa":
+        st.markdown("**Descricao:** PCLs onde as coletas em 2025 sao inferiores a 50% da capacidade maxima definida.")
+
+        if 'volume_maximo_coletas_2025' not in df_labs.columns or 'coletas_2025' not in df_labs.columns:
+            st.warning("Dados de capacidade ou coletas 2025 nao disponiveis.")
+        else:
+            df_cap = df_labs[df_labs['volume_maximo_coletas_2025'] > 0].copy()
+            df_cap['utilizacao_pct'] = (df_cap['coletas_2025'] / df_cap['volume_maximo_coletas_2025'] * 100).round(1)
+            df_result = df_cap[df_cap['utilizacao_pct'] < 50].sort_values('utilizacao_pct')
+
+            if not df_result.empty:
+                st.success(f"Encontrados {len(df_result)} PCLs com capacidade ociosa (< 50% utilizada)")
+
+                cols = ['cnpj', 'razao_social', 'cidade', 'uf', 'representante',
+                        'coletas_2025', 'volume_maximo_coletas_2025', 'utilizacao_pct',
+                        'valor_total_coleta', 'status']
+                cols_available = [c for c in cols if c in df_result.columns]
+                df_display = df_result[cols_available].copy()
+
+                rename_map = {
+                    'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'cidade': 'Cidade', 'uf': 'UF',
+                    'representante': 'Representante', 'coletas_2025': 'Coletas 2025',
+                    'volume_maximo_coletas_2025': 'Capacidade 2025', 'utilizacao_pct': '% Utilizacao',
+                    'valor_total_coleta': 'Valor Coleta', 'status': 'Status'
+                }
+                df_display = df_display.rename(columns={k: v for k, v in rename_map.items() if k in df_display.columns})
+                st.dataframe(df_display, use_container_width=True, hide_index=True, height=500)
+
+                output = BytesIO()
+                with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                    df_display.to_excel(writer, index=False, sheet_name='Capacidade Ociosa')
+                st.download_button(
+                    "Download Excel",
+                    output.getvalue(),
+                    f'pcls_capacidade_ociosa_{datetime.now().strftime("%Y%m%d")}.xlsx',
+                    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                )
+            else:
+                st.info("Nenhum PCL com capacidade ociosa encontrado.")
+
+    # Análise 10: Distribuição por Finalidade
+    elif analise_tipo == "Distribuicao por Finalidade":
+        st.markdown("**Descricao:** Distribuicao das coletas por finalidade (CNH, CLT, Outro, Concurso) agrupadas por estado.")
+
+        finalidade_cols = {
+            'finalidade_cnh': 'CNH', 'finalidade_clt': 'CLT',
+            'finalidade_outro': 'Outro', 'finalidade_concurso_publico': 'Concurso'
+        }
+        existentes = {k: v for k, v in finalidade_cols.items() if k in df_labs.columns}
+
+        if not existentes:
+            st.warning("Dados de finalidade nao disponiveis no arquivo atual.")
+        else:
+            # Totais gerais
+            col_metricas = st.columns(len(existentes))
+            for i, (col_name, label) in enumerate(existentes.items()):
+                with col_metricas[i]:
+                    val = int(df_labs[col_name].sum())
+                    create_metric_card(f"Total {label}", format_number(val), "", "", "gray")
+
+            st.markdown("---")
+
+            # Tabela por UF
+            if 'uf' in df_labs.columns:
+                cols_agg = {k: 'sum' for k in existentes.keys()}
+                df_uf = df_labs.groupby('uf').agg(cols_agg).reset_index()
+                df_uf = df_uf.rename(columns={k: v for k, v in existentes.items()})
+                df_uf = df_uf.rename(columns={'uf': 'UF'})
+                df_uf['Total'] = df_uf[[v for v in existentes.values()]].sum(axis=1).astype(int)
+                df_uf = df_uf.sort_values('Total', ascending=False)
+
+                # Converter para int
+                for col in list(existentes.values()) + ['Total']:
+                    if col in df_uf.columns:
+                        df_uf[col] = df_uf[col].astype(int)
+
+                st.dataframe(df_uf, use_container_width=True, hide_index=True)
+
+                output = BytesIO()
+                with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                    df_uf.to_excel(writer, index=False, sheet_name='Finalidade por UF')
+                st.download_button(
+                    "Download Excel",
+                    output.getvalue(),
+                    f'finalidade_por_uf_{datetime.now().strftime("%Y%m%d")}.xlsx',
+                    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                )
+
 @st.fragment
 def _qualidade_dados_fragment():
     """ADD-961: Conteúdo da aba Qualidade de Dados. Fragment para manter a aba ativa ao mudar filtros."""
@@ -3440,12 +3760,56 @@ with tab_visao_geral:
                 pass
     
     st.markdown("---")
-    
+
+    # Perfil Comercial
+    create_section_header("💼", "Perfil Comercial", "Indicadores comerciais e financeiros")
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        if not df_labs.empty and 'status_voucher' in df_labs.columns:
+            aceita_voucher = len(df_labs[df_labs['status_voucher'].astype(str).str.lower().isin(['sim', 'true', '1', 'ativo'])])
+            total_pcls_val = int(total_pcls) if pd.notna(total_pcls) else 1
+            create_progress_card("Aceita Voucher", aceita_voucher, total_pcls_val, "#22C55E")
+
+    with col2:
+        if not df_labs.empty and 'simples_nacional' in df_labs.columns:
+            simples = len(df_labs[df_labs['simples_nacional'].astype(str).str.lower().isin(['sim', 'true', '1'])])
+            total_pcls_val = int(total_pcls) if pd.notna(total_pcls) else 1
+            create_progress_card("Simples Nacional", simples, total_pcls_val, "#3B82F6")
+
+    with col3:
+        if not df_labs.empty and 'valor_total_coleta' in df_labs.columns:
+            media_valor = df_labs['valor_total_coleta'].mean()
+            create_metric_card("Valor Medio Coleta", format_currency(media_valor), "", "", "gray")
+
+    with col4:
+        if not df_labs.empty and 'volume_maximo_coletas_2025' in df_labs.columns:
+            cap_total = int(df_labs['volume_maximo_coletas_2025'].sum())
+            create_metric_card("Capacidade 2025", format_number(cap_total), "Volume maximo total", "", "gray")
+
+    # Gráfico de Finalidade das Coletas
+    if not df_labs.empty:
+        finalidade_cols = {
+            'finalidade_cnh': 'CNH', 'finalidade_clt': 'CLT',
+            'finalidade_outro': 'Outro', 'finalidade_concurso_publico': 'Concurso'
+        }
+        finalidade_existentes = {k: v for k, v in finalidade_cols.items() if k in df_labs.columns}
+        if finalidade_existentes:
+            totais = {v: int(df_labs[k].sum()) for k, v in finalidade_existentes.items()}
+            totais = {k: v for k, v in totais.items() if v > 0}
+            if totais:
+                col1, col2 = st.columns(2)
+                with col1:
+                    create_top_list_card("Finalidade das Coletas", totais, "#8B5CF6")
+
+    st.markdown("---")
+
     # Gráficos por Estado
     create_section_header("📊", "Distribuição por Estado", "Top 12 estados por volume")
-    
+
     col1, col2 = st.columns(2)
-    
+
     with col1:
         if not df_labs.empty and 'uf' in df_labs.columns:
             df_estado = df_labs.groupby('uf').size().reset_index(name='Quantidade')
@@ -3643,6 +4007,22 @@ Planilha Excel (Total na planilha)
         | **Empresas na Cidade** | Qtd. de empresas na mesma cidade |
         """)
 
+        st.markdown("### Colunas Adicionais de PCLs (Seletor)")
+        st.markdown("""
+        Na aba **PCLs**, use o seletor "Colunas adicionais" para exibir grupos extras:
+
+        | Grupo | Colunas | Descricao |
+        |-------|---------|-----------|
+        | **Contato** | E-mail, E-mail Financeiro, Telefone | Dados de contato do laboratorio |
+        | **Comercial** | Status CRM, Status Voucher | Situacao comercial no sistema |
+        | **Capacidade** | Vol. Max. 2023/2024/2025 | Volume maximo de coletas definido por ano |
+        | **Finalidade** | CNH, CLT, Outro, Concurso | Total de coletas por finalidade |
+        | **Finalidade Detalhado** | CNH-FE, CNH-FC, CLT-FE, CLT-FC | Detalhamento por tipo (Foto + Exame / Foto + Coleta) |
+        | **Financeiro/Fiscal** | Valor Coleta, Simples Nacional, CNPJ Paulinia | Dados financeiros e fiscais |
+        | **Formas de Pagamento** | Dinheiro, Credito, Debito, Boleto, etc. | Formas de pagamento aceitas |
+        | **Historico/Mensal** | Coletas 2023, Nov/2025, Dez/2025, Jan/2026 | Historico e dados mensais de coletas |
+        """)
+
         st.markdown("### O que significa quando Transportadora mostra múltiplos valores?")
         st.info("Quando uma cidade possui mais de uma transportadora, elas são separadas por \" | \". Exemplo: **AIRLAB | BIOMED LOG | CORREIOS AP**")
 
@@ -3722,6 +4102,31 @@ Planilha Excel (Total na planilha)
             - Resumo por Representante: Ranking consolidado de todos os representantes
 
             **Utilidade:** Avaliar performance de representantes comerciais e acompanhar metas de credenciamento.
+            """)
+
+        with st.expander("8. PCLs sem coleta recente (3 meses)"):
+            st.markdown("""
+            Lista PCLs que **nao realizaram nenhuma coleta** nos ultimos 3 meses disponiveis (Nov/2025, Dez/2025, Jan/2026).
+
+            **Inclui dados de contato** (e-mail e telefone) para facilitar o follow-up.
+
+            **Utilidade:** Identificar PCLs que precisam de acompanhamento comercial urgente.
+            """)
+
+        with st.expander("9. PCLs com capacidade ociosa"):
+            st.markdown("""
+            Lista PCLs onde as **coletas realizadas em 2025 sao inferiores a 50%** da capacidade maxima definida.
+
+            Exibe a porcentagem de utilizacao para priorizar acoes.
+
+            **Utilidade:** Identificar oportunidades de aumento de volume em laboratorios subutilizados.
+            """)
+
+        with st.expander("10. Distribuicao por Finalidade"):
+            st.markdown("""
+            Mostra a distribuicao das coletas por **finalidade** (CNH, CLT, Outro, Concurso Publico) agrupadas por estado.
+
+            **Utilidade:** Entender o perfil de demanda por regiao e tipo de exame.
             """)
 
     with subtab5:

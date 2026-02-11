@@ -25,6 +25,92 @@ PERIODO_OPTIONS = {
     "Personalizado": "custom"
 }
 
+# Tooltips padrão para colunas de tabelas
+COLUMN_TOOLTIPS = {
+    # Identificação
+    "UF": "Sigla do estado (Unidade Federativa)",
+    "Cidade": "Nome da cidade",
+    "CNPJ": "Número de identificação fiscal (CNPJ)",
+    "Razão Social": "Nome oficial registrado na Receita Federal",
+    "Nome Fantasia": "Nome comercial do estabelecimento",
+    # PCLs
+    "PCLs": "Quantidade de PCLs (Pontos de Coleta/Laboratórios)",
+    "PCLs Ativos": "PCLs com coleta nos últimos 90 dias",
+    "PCLs Inativos": "PCLs sem coleta há mais de 90 dias",
+    "Total Coletas": "Soma acumulada de coletas realizadas",
+    "Coletas Total": "Soma acumulada de coletas realizadas",
+    "Coletas": "Quantidade de coletas no período",
+    "Coletas 2025": "Coletas realizadas em 2025",
+    "Média por PCL": "Média de coletas por PCL (total ÷ quantidade de PCLs)",
+    "Qtd PCLs": "Quantidade de PCLs no estado",
+    "Última Coleta": "Data da última coleta realizada",
+    "Ultima Coleta": "Data da última coleta realizada",
+    "Dias s/ Coleta": "Dias desde a última coleta",
+    "Status": "Ativo (coleta ≤ 90 dias) ou Inativo (> 90 dias)",
+    "Ativo/Inativo": "Ativo (coleta ≤ 90 dias) ou Inativo (> 90 dias)",
+    "Data Credenciamento": "Data em que foi credenciado no sistema",
+    "Representante": "Representante comercial responsável",
+    "Transportadora": "Empresa de logística para coleta de amostras",
+    "Frequência": "Periodicidade de coleta (Diário, Semanal, etc.)",
+    # Empresas
+    "Empresas": "Quantidade de empresas credenciadas",
+    "Empresas Ativas": "Empresas com uso de voucher nos últimos 365 dias",
+    "Empresas Inativas": "Empresas sem uso de voucher há mais de 365 dias",
+    "Vouchers": "Quantidade de vouchers utilizados",
+    "Total Vouchers": "Soma acumulada de vouchers utilizados",
+    "Última Utilização": "Data da última utilização de voucher",
+    "Último Voucher": "Data do último voucher utilizado",
+    "Cidades c/ PCL": "Cidades com pelo menos um PCL credenciado",
+    "Cidades c/ Empresa": "Cidades com pelo menos uma empresa credenciada",
+    "Cidades Atendidas": "Quantidade de cidades com presença no estado",
+    # Comercial
+    "Aceita Voucher": "Se o PCL aceita pagamento via voucher (Sim/Não)",
+    "Valor Coleta": "Valor cobrado por coleta (R$)",
+    "Valor do Exame": "Valor cobrado por exame (R$)",
+    "Preço Exclusivo": "Valor negociado para a empresa (R$)",
+    "Acumulado Coletas": "Total histórico de coletas",
+    "Acumulado Coletas 2026": "Coletas acumuladas no ano de 2026",
+    "Acumulado Vouchers": "Total histórico de vouchers utilizados",
+    "Acumulado Vouchers 2026": "Vouchers acumulados no ano de 2026",
+    "Capacidade 2025": "Volume máximo de coletas definido para 2025",
+    "% Utilizacao": "Percentual da capacidade máxima utilizada",
+    # Empresas na cidade
+    "Empresas na Cidade": "Qtd. de empresas credenciadas na mesma cidade",
+    "Empresas Inativas na Cidade": "Qtd. de empresas inativas na mesma cidade",
+    "PCLs Inativos na Cidade": "Qtd. de PCLs inativos na mesma cidade",
+    # Qualidade
+    "Entidade": "PCL ou Empresa com problema de cadastro",
+    "Tipo": "Tipo do registro (PCL ou Empresa)",
+    "Problema": "Descrição do problema encontrado",
+    "Severidade": "Grau de impacto: Crítico, Alto, Médio ou Baixo",
+    "Campo": "Campo do cadastro com problema",
+    "Valor Atual": "Valor registrado no campo com problema",
+    # Contato
+    "E-mail": "Endereço de e-mail de contato",
+    "Telefone": "Número de telefone de contato",
+    # Representante
+    "PCLs Credenciados": "PCLs credenciados pelo representante no período",
+    "Empresas Credenciadas": "Empresas credenciadas pelo representante no período",
+    "PCLs Ativos": "PCLs ativos do representante",
+    "Empresas Ativas": "Empresas ativas do representante",
+    "Total Credenciamentos": "Soma de PCLs e empresas credenciados",
+    # Meses
+    "Nov/2025": "Coletas realizadas em novembro/2025",
+    "Dez/2025": "Coletas realizadas em dezembro/2025",
+    "Jan/2026": "Coletas realizadas em janeiro/2026",
+}
+
+
+def get_column_config(df):
+    """Gera column_config com tooltips para as colunas do DataFrame."""
+    config = {}
+    for col in df.columns:
+        tooltip = COLUMN_TOOLTIPS.get(col)
+        if tooltip:
+            config[col] = st.column_config.Column(help=tooltip)
+    return config
+
+
 # ============================================
 # CONFIGURAÇÃO DA PÁGINA
 # ============================================
@@ -736,7 +822,8 @@ def create_section_header(icon, title, subtitle="", help=None):
             else:
                 st.caption(subtitle)
         elif help:
-            st.caption("", help=help)
+            # Sem subtitle: usar o help como subtitle visível
+            st.caption(help)
     except Exception as e:
         st.error(f"Erro: {str(e)}")
 
@@ -809,14 +896,14 @@ def create_bar_chart(df, x_col, y_col, title, max_items=12, color='#22C55E', sor
             y=0.97
         ),
         xaxis=dict(
-            title=None,
+            title="",
             showgrid=True,
             gridcolor='rgba(128,128,128,0.2)',
             showline=False,
             zeroline=False
         ),
         yaxis=dict(
-            title=None,
+            title="",
             showline=False
         ),
         plot_bgcolor='rgba(0,0,0,0)',
@@ -909,14 +996,14 @@ def create_grouped_bar_chart(df, x_col, title, colors=None, max_items=10, labels
             y=0.97
         ),
         xaxis=dict(
-            title=None,
+            title="",
             showgrid=True,
             gridcolor='rgba(128,128,128,0.2)',
             showline=False,
             zeroline=False
         ),
         yaxis=dict(
-            title=None,
+            title="",
             showline=False
         ),
         barmode='group',
@@ -998,7 +1085,7 @@ def create_top_list_card(title, data_dict, color="#22C55E", help=None):
         ))
 
         fig.update_layout(
-            title=None,
+            title="",
             xaxis=dict(title="", showgrid=True, gridcolor='rgba(128,128,128,0.2)'),
             yaxis=dict(title=""),
             plot_bgcolor='rgba(0,0,0,0)',
@@ -2295,7 +2382,8 @@ def _visao_estado_fragment():
                            help="Quantidade de cidades com pelo menos uma empresa no estado")
     st.markdown("---")
     if estado_filtro != "Todos":
-        create_section_header("📊", f"Distribuição por Cidade - {estado_filtro}")
+        create_section_header("📊", f"Distribuição por Cidade - {estado_filtro}",
+                              help="Top cidades com mais PCLs e empresas no estado selecionado")
         # Constante: gráfico mostra só as top N cidades para ficar legível; lista completa fica na tabela
         MAX_CIDADES_GRAFICO = 15
         col1, col2 = st.columns(2)
@@ -2322,8 +2410,10 @@ def _visao_estado_fragment():
                 st.plotly_chart(fig, use_container_width=True)
                 # Tabela com todas as cidades (ordenada alfabeticamente)
                 st.caption("Todas as cidades (PCLs)")
+                df_cidade_pcl_display = df_cidade_pcl.rename(columns={"cidade": "Cidade", "Quantidade": "PCLs"})
                 st.dataframe(
-                    df_cidade_pcl.rename(columns={"cidade": "Cidade", "Quantidade": "PCLs"}),
+                    df_cidade_pcl_display,
+                    column_config=get_column_config(df_cidade_pcl_display),
                     use_container_width=True, hide_index=True, height=280
                 )
             else:
@@ -2348,8 +2438,10 @@ def _visao_estado_fragment():
                 fig.update_layout(title="")
                 st.plotly_chart(fig, use_container_width=True)
                 st.caption("Todas as cidades (Empresas)")
+                df_cidade_emp_display = df_cidade_emp.rename(columns={"cidade": "Cidade", "Quantidade": "Empresas"})
                 st.dataframe(
-                    df_cidade_emp.rename(columns={"cidade": "Cidade", "Quantidade": "Empresas"}),
+                    df_cidade_emp_display,
+                    column_config=get_column_config(df_cidade_emp_display),
                     use_container_width=True, hide_index=True, height=280
                 )
             else:
@@ -2405,7 +2497,7 @@ def _visao_estado_fragment():
             if col != 'UF':
                 tabela_resumo[col] = pd.to_numeric(tabela_resumo[col], errors='coerce').fillna(0).astype(int)
         tabela_resumo = tabela_resumo.sort_values('UF', ascending=True)
-        st.dataframe(tabela_resumo, use_container_width=True, hide_index=True, height=500)
+        st.dataframe(tabela_resumo, column_config=get_column_config(tabela_resumo), use_container_width=True, hide_index=True, height=500)
         output = BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             tabela_resumo.to_excel(writer, index=False, sheet_name='Resumo por UF')
@@ -2535,13 +2627,13 @@ def _analise_coletas_fragment():
         if colunas_mensais_existentes:
             st.markdown("---")
             create_section_header("📅", "Tendencia Mensal",
-                                  help="Coletas por periodo mensal. (Adicionado 09/02/2026)")
+                                  help="Coletas por periodo mensal.")
             cols_mensal = st.columns(len(colunas_mensais_existentes))
             tooltips_mensais = {
-                'coletas_2023': 'Total de coletas realizadas em 2023. (Adicionado 09/02/2026)',
-                'coletas_nov_2025': 'Coletas realizadas em novembro/2025. (Adicionado 09/02/2026)',
-                'coletas_dez_2025': 'Coletas realizadas em dezembro/2025. (Adicionado 09/02/2026)',
-                'coletas_jan_2026': 'Coletas realizadas em janeiro/2026. (Adicionado 09/02/2026)',
+                'coletas_2023': 'Total de coletas realizadas em 2023.',
+                'coletas_nov_2025': 'Coletas realizadas em novembro/2025.',
+                'coletas_dez_2025': 'Coletas realizadas em dezembro/2025.',
+                'coletas_jan_2026': 'Coletas realizadas em janeiro/2026.',
             }
             for i, (col_name, label) in enumerate(colunas_mensais_existentes.items()):
                 with cols_mensal[i]:
@@ -2553,19 +2645,19 @@ def _analise_coletas_fragment():
         if 'volume_maximo_coletas_2025' in df_labs_coletas.columns and 'coletas_2025' in df_labs_coletas.columns:
             st.markdown("---")
             create_section_header("📈", "Capacidade vs Realizado 2025",
-                                  help="Comparacao entre a capacidade maxima definida e as coletas efetivamente realizadas em 2025. (Adicionado 09/02/2026)")
+                                  help="Comparacao entre a capacidade maxima definida e as coletas efetivamente realizadas em 2025.")
             col1, col2, col3 = st.columns(3)
             cap_total = int(df_labs_coletas['volume_maximo_coletas_2025'].sum())
             real_total = int(df_labs_coletas['coletas_2025'].sum())
             with col1:
                 create_metric_card("Capacidade Total", format_number(cap_total), "Volume maximo 2025", "", "gray",
-                                   help="Soma do volume maximo de coletas definido para 2025. (Adicionado 09/02/2026)")
+                                   help="Soma do volume maximo de coletas definido para 2025.")
             with col2:
                 create_metric_card("Realizado", format_number(real_total), "Coletas 2025", "", "gray",
-                                   help="Total de coletas efetivamente realizadas em 2025. (Adicionado 09/02/2026)")
+                                   help="Total de coletas efetivamente realizadas em 2025.")
             with col3:
                 create_progress_card("Utilizacao", real_total, cap_total, "#8B5CF6",
-                                     help="Percentual da capacidade maxima que foi utilizada. (Adicionado 09/02/2026)")
+                                     help="Percentual da capacidade maxima que foi utilizada.")
 
         st.markdown("---")
 
@@ -2602,8 +2694,8 @@ def _analise_coletas_fragment():
                 ))
 
                 fig.update_layout(
-                    xaxis=dict(title=None, showgrid=True, gridcolor='rgba(128,128,128,0.2)'),
-                    yaxis=dict(title=None),
+                    xaxis=dict(title="", showgrid=True, gridcolor='rgba(128,128,128,0.2)'),
+                    yaxis=dict(title=""),
                     plot_bgcolor='rgba(0,0,0,0)',
                     paper_bgcolor='rgba(0,0,0,0)',
                     height=450,
@@ -2632,8 +2724,8 @@ def _analise_coletas_fragment():
                 ))
 
                 fig.update_layout(
-                    xaxis=dict(title=None, showgrid=True, gridcolor='rgba(128,128,128,0.2)'),
-                    yaxis=dict(title=None),
+                    xaxis=dict(title="", showgrid=True, gridcolor='rgba(128,128,128,0.2)'),
+                    yaxis=dict(title=""),
                     plot_bgcolor='rgba(0,0,0,0)',
                     paper_bgcolor='rgba(0,0,0,0)',
                     height=450,
@@ -2654,6 +2746,7 @@ def _analise_coletas_fragment():
 
             st.dataframe(
                 coletas_estado,
+                column_config=get_column_config(coletas_estado),
                 use_container_width=True,
                 hide_index=True,
                 height=400
@@ -2682,6 +2775,7 @@ def _analise_coletas_fragment():
 
                 st.dataframe(
                     top_pcls,
+                    column_config=get_column_config(top_pcls),
                     use_container_width=True,
                     hide_index=True,
                     height=500
@@ -2829,7 +2923,7 @@ def _listagem_pcls_fragment():
         df_final = prepare_display_dataframe(df_display, colunas_pcl, rename_map_pcl)
 
         if not df_final.empty:
-            st.dataframe(df_final, use_container_width=True, hide_index=True, height=500)
+            st.dataframe(df_final, column_config=get_column_config(df_final), use_container_width=True, hide_index=True, height=500)
         else:
             st.warning("Nenhum dado disponível para exibição.")
 
@@ -3020,7 +3114,7 @@ def _listagem_empresas_fragment():
         df_final = prepare_display_dataframe(df_display, colunas_empresa, rename_map_empresa)
 
         if not df_final.empty:
-            st.dataframe(df_final, use_container_width=True, hide_index=True, height=500)
+            st.dataframe(df_final, column_config=get_column_config(df_final), use_container_width=True, hide_index=True, height=500)
         else:
             st.warning("Nenhum dado disponível para exibição.")
 
@@ -3100,7 +3194,7 @@ def _analises_especificas_fragment():
                               'cidade': 'Cidade', 'uf': 'UF', 'transportadora': 'Transportadora', 'frequencia': 'Frequência'}
                 df_display = df_display.rename(columns=rename_map)
 
-                st.dataframe(df_display, use_container_width=True, hide_index=True, height=500)
+                st.dataframe(df_display, column_config=get_column_config(df_display), use_container_width=True, hide_index=True, height=500)
 
                 # Download
                 output = BytesIO()
@@ -3169,7 +3263,7 @@ def _analises_especificas_fragment():
                                   'empresas_inativas_cidade': 'Empresas Inativas na Cidade'}
                     df_display = df_display.rename(columns=rename_map)
 
-                    st.dataframe(df_display, use_container_width=True, hide_index=True, height=500)
+                    st.dataframe(df_display, column_config=get_column_config(df_display), use_container_width=True, hide_index=True, height=500)
 
                     output = BytesIO()
                     with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -3222,7 +3316,7 @@ def _analises_especificas_fragment():
                               'cidade': 'Cidade', 'uf': 'UF'}
                 df_display = df_display.rename(columns=rename_map)
 
-                st.dataframe(df_display, use_container_width=True, hide_index=True, height=500)
+                st.dataframe(df_display, column_config=get_column_config(df_display), use_container_width=True, hide_index=True, height=500)
 
                 output = BytesIO()
                 with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -3289,7 +3383,7 @@ def _analises_especificas_fragment():
                                   'pcls_inativos_cidade': 'PCLs Inativos na Cidade'}
                     df_display = df_display.rename(columns=rename_map)
 
-                    st.dataframe(df_display, use_container_width=True, hide_index=True, height=500)
+                    st.dataframe(df_display, column_config=get_column_config(df_display), use_container_width=True, hide_index=True, height=500)
 
                     output = BytesIO()
                     with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -3315,7 +3409,7 @@ def _analises_especificas_fragment():
                           'cidade': 'Cidade', 'uf': 'UF', 'transportadora': 'Transportadora', 'frequencia': 'Frequência',
                           'acumulado_coletas': 'Total Coletas', 'status': 'Status'}
             df_display = df_display.rename(columns=rename_map)
-            st.dataframe(df_display, use_container_width=True, hide_index=True, height=500)
+            st.dataframe(df_display, column_config=get_column_config(df_display), use_container_width=True, hide_index=True, height=500)
 
     # Estados com menor cobertura
     elif analise_tipo == "Estados com menor cobertura":
@@ -3326,7 +3420,7 @@ def _analises_especificas_fragment():
             }).reset_index()
             cobertura.columns = ['UF', 'Cidades Atendidas', 'Total Coletas']
             cobertura = cobertura.sort_values('Cidades Atendidas')
-            st.dataframe(cobertura, use_container_width=True, hide_index=True)
+            st.dataframe(cobertura, column_config=get_column_config(cobertura), use_container_width=True, hide_index=True)
 
     # ADD-955: Acompanhamento por Representante
     elif analise_tipo == "Acompanhamento por Representante":
@@ -3449,7 +3543,7 @@ def _analises_especificas_fragment():
                     }
                     df_display = df_display.rename(columns={k: v for k, v in rename_map.items() if k in df_display.columns})
 
-                    st.dataframe(df_display, use_container_width=True, hide_index=True, height=400)
+                    st.dataframe(df_display, column_config=get_column_config(df_display), use_container_width=True, hide_index=True, height=400)
 
                     # Download
                     output = BytesIO()
@@ -3477,7 +3571,7 @@ def _analises_especificas_fragment():
                     }
                     df_display = df_display.rename(columns={k: v for k, v in rename_map.items() if k in df_display.columns})
 
-                    st.dataframe(df_display, use_container_width=True, hide_index=True, height=400)
+                    st.dataframe(df_display, column_config=get_column_config(df_display), use_container_width=True, hide_index=True, height=400)
 
                     # Download
                     output = BytesIO()
@@ -3540,7 +3634,7 @@ def _analises_especificas_fragment():
                         if col in resumo_total.columns:
                             resumo_total[col] = resumo_total[col].astype(int)
 
-                    st.dataframe(resumo_total, use_container_width=True, hide_index=True)
+                    st.dataframe(resumo_total, column_config=get_column_config(resumo_total), use_container_width=True, hide_index=True)
 
                     # Download resumo
                     output = BytesIO()
@@ -3588,7 +3682,7 @@ def _analises_especificas_fragment():
                     'coletas_nov_2025': 'Nov/2025', 'coletas_dez_2025': 'Dez/2025', 'coletas_jan_2026': 'Jan/2026'
                 }
                 df_display = df_display.rename(columns={k: v for k, v in rename_map.items() if k in df_display.columns})
-                st.dataframe(df_display, use_container_width=True, hide_index=True, height=500)
+                st.dataframe(df_display, column_config=get_column_config(df_display), use_container_width=True, hide_index=True, height=500)
 
                 output = BytesIO()
                 with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -3629,7 +3723,7 @@ def _analises_especificas_fragment():
                     'valor_total_coleta': 'Valor Coleta', 'status': 'Status'
                 }
                 df_display = df_display.rename(columns={k: v for k, v in rename_map.items() if k in df_display.columns})
-                st.dataframe(df_display, use_container_width=True, hide_index=True, height=500)
+                st.dataframe(df_display, column_config=get_column_config(df_display), use_container_width=True, hide_index=True, height=500)
 
                 output = BytesIO()
                 with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -3658,10 +3752,10 @@ def _analises_especificas_fragment():
         else:
             # Totais gerais
             tooltips_finalidade = {
-                'finalidade_cnh': 'Total de coletas para habilitacao (CNH). (Adicionado 09/02/2026)',
-                'finalidade_clt': 'Total de coletas para exames trabalhistas (CLT). (Adicionado 09/02/2026)',
-                'finalidade_outro': 'Total de coletas para outras finalidades. (Adicionado 09/02/2026)',
-                'finalidade_concurso_publico': 'Total de coletas para concursos publicos. (Adicionado 09/02/2026)',
+                'finalidade_cnh': 'Total de coletas para habilitacao (CNH).',
+                'finalidade_clt': 'Total de coletas para exames trabalhistas (CLT).',
+                'finalidade_outro': 'Total de coletas para outras finalidades.',
+                'finalidade_concurso_publico': 'Total de coletas para concursos publicos.',
             }
             col_metricas = st.columns(len(existentes))
             for i, (col_name, label) in enumerate(existentes.items()):
@@ -3741,7 +3835,7 @@ def _analises_especificas_fragment():
                     if col in df_uf.columns:
                         df_uf[col] = df_uf[col].astype(int)
 
-                st.dataframe(df_uf, use_container_width=True, hide_index=True)
+                st.dataframe(df_uf, column_config=get_column_config(df_uf), use_container_width=True, hide_index=True)
 
                 output = BytesIO()
                 with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -3884,7 +3978,7 @@ def _qualidade_dados_fragment():
 
             df_display['Severidade'] = df_display['Severidade'].apply(add_severidade_icon)
 
-            st.dataframe(df_display, use_container_width=True, hide_index=True, height=500)
+            st.dataframe(df_display, column_config=get_column_config(df_display), use_container_width=True, hide_index=True, height=500)
 
     with subtab2:
         if not df_ofensores.empty:
@@ -4105,7 +4199,7 @@ with tab_visao_geral:
             }
             df_exibir = df_exibir.rename(columns={k: v for k, v in rename_map.items() if k in df_exibir.columns})
 
-            st.dataframe(df_exibir, use_container_width=True, height=300)
+            st.dataframe(df_exibir, column_config=get_column_config(df_exibir), use_container_width=True, height=300)
 
             # Botão de download
             output = BytesIO()
@@ -4157,7 +4251,8 @@ with tab_visao_geral:
             create_progress_card("PCLs Ativos", pcls_ativos_val, total_pcls_val, "#22C55E",
                                  help="PCLs com coleta nos ultimos 90 dias")
         except:
-            create_progress_card("PCLs Ativos", 0, 1, "#22C55E")
+            create_progress_card("PCLs Ativos", 0, 1, "#22C55E",
+                                 help="PCLs com coleta nos ultimos 90 dias")
 
     with col2:
         try:
@@ -4166,7 +4261,8 @@ with tab_visao_geral:
             create_progress_card("Empresas Ativas", empresas_ativas_val, total_empresas_val, "#3B82F6",
                                  help="Empresas com uso de voucher nos ultimos 365 dias")
         except:
-            create_progress_card("Empresas Ativas", 0, 1, "#3B82F6")
+            create_progress_card("Empresas Ativas", 0, 1, "#3B82F6",
+                                 help="Empresas com uso de voucher nos ultimos 365 dias")
     
     with col3:
         if not df_labs_filtered.empty and 'uf' in df_labs_filtered.columns:
@@ -4283,7 +4379,7 @@ with tab_ajuda:
                           help="Documentacao sobre navegacao, colunas, analises e fontes de dados")
 
     # Sub-tabs para organizar o conteúdo de ajuda
-    subtab1, subtab2, subtab3, subtab4, subtab5, subtab6 = st.tabs(["Navegação", "Entendendo os Dados", "Colunas e Métricas", "Análises", "Problemas Comuns", "Fontes de Dados"])
+    subtab1, subtab2, subtab3, subtab4, subtab_downloads, subtab5, subtab6 = st.tabs(["Navegação", "Entendendo os Dados", "Colunas e Métricas", "Análises", "Downloads", "Problemas Comuns", "Fontes de Dados"])
 
     with subtab1:
         st.markdown("### Como navegar no dashboard?")
@@ -4314,6 +4410,21 @@ with tab_ajuda:
         - Nos demais modos, as datas são calculadas automaticamente
 
         **Botão "Limpar Filtros"** restaura todos os filtros da aba para os valores padrão.
+
+        **Colunas Adicionais (aba PCLs):** Na aba **PCLs**, existe um seletor chamado **"Colunas adicionais"** que permite exibir grupos extras de colunas na tabela. Selecione um ou mais grupos para expandir a visualização:
+
+        | Grupo | Colunas |
+        |-------|---------|
+        | **Contato** | E-mail, E-mail Financeiro, Telefone |
+        | **Comercial** | Status CRM, Status Voucher |
+        | **Capacidade** | Volume Máximo 2023, 2024 e 2025 |
+        | **Finalidade** | CNH, CLT, Outro, Concurso |
+        | **Finalidade Detalhado** | CNH-FE, CNH-FC, CLT-FE, CLT-FC |
+        | **Financeiro/Fiscal** | Valor Coleta, Simples Nacional, CNPJ Paulínia |
+        | **Formas de Pagamento** | Dinheiro, Crédito, Débito, Boleto, Faturamento, etc. |
+        | **Histórico/Mensal** | Coletas 2023, Nov/2025, Dez/2025, Jan/2026 |
+
+        As colunas selecionadas também são incluídas nos downloads em Excel.
         """)
 
     with subtab2:
@@ -4570,6 +4681,311 @@ Planilha Excel (Total na planilha)
 
             **Utilidade:** Entender o perfil de demanda por regiao e tipo de exame.
             """)
+
+    with subtab_downloads:
+        st.markdown("### Downloads Disponíveis")
+        st.markdown("""
+        O dashboard permite exportar dados em **Excel (.xlsx)** em diversas abas.
+        Os downloads respeitam os filtros aplicados — se você filtrou por estado ou período, o Excel conterá apenas os dados filtrados.
+        """)
+
+        with st.expander("📥 Resumo por UF (aba Por Estado)"):
+            st.markdown("""
+            **Arquivo:** `resumo_por_uf_YYYYMMDD.xlsx`
+
+            | Coluna | Descrição |
+            |--------|-----------|
+            | UF | Sigla do estado |
+            | PCLs | Total de PCLs no estado |
+            | PCLs Ativos | PCLs com coleta nos últimos 90 dias |
+            | PCLs Inativos | PCLs sem coleta há mais de 90 dias |
+            | Empresas | Total de empresas no estado |
+            | Empresas Ativas | Empresas com voucher nos últimos 365 dias |
+            | Empresas Inativas | Empresas sem voucher há mais de 365 dias |
+            | Coletas | Soma acumulada de coletas |
+            | Vouchers | Soma acumulada de vouchers |
+            | Cidades c/ PCL | Cidades com pelo menos um PCL |
+            | Cidades c/ Empresa | Cidades com pelo menos uma empresa |
+            """)
+
+        with st.expander("📥 Lista de PCLs (aba PCLs)"):
+            st.markdown("""
+            **Arquivo:** `pcls_YYYYMMDD.xlsx`
+
+            **Colunas fixas:**
+
+            | Coluna | Descrição |
+            |--------|-----------|
+            | CNPJ | Identificação fiscal |
+            | Razão Social | Nome oficial |
+            | Nome Fantasia | Nome comercial |
+            | Endereço / Bairro / CEP | Localização completa |
+            | Cidade / UF | Estado e cidade |
+            | Data Credenciamento | Data do credenciamento |
+            | Representante | Representante comercial |
+            | Coletas Total | Acumulado histórico de coletas |
+            | Coletas 2025 | Coletas realizadas em 2025 |
+            | Última Coleta | Data da última coleta |
+            | Dias s/ Coleta | Dias desde a última coleta |
+            | Status | Ativo ou Inativo |
+            | Transportadora | Empresa de logística |
+            | Frequência | Periodicidade de coleta |
+            | Empresas na Cidade | Qtd. de empresas na mesma cidade |
+            | Empresas Ativas / Inativas | Qtd. de empresas ativas e inativas na cidade |
+            | Empresas c/ Voucher | Empresas que usaram voucher na cidade |
+
+            **Colunas adicionais (conforme seleção no filtro "Colunas adicionais"):**
+
+            | Grupo | Colunas incluídas |
+            |-------|-------------------|
+            | Contato | E-mail, E-mail Financeiro, Telefone |
+            | Comercial | Status CRM, Status Voucher |
+            | Capacidade | Vol. Max. 2023, 2024, 2025 |
+            | Finalidade | CNH, CLT, Outro, Concurso |
+            | Finalidade Detalhado | CNH-FE, CNH-FC, CLT-FE, CLT-FC |
+            | Financeiro/Fiscal | Valor Coleta, Simples Nacional, CNPJ Paulínia |
+            | Formas de Pagamento | Dinheiro, Crédito, Débito, Boleto, Faturamento, etc. |
+            | Histórico/Mensal | Coletas 2023, Nov/2025, Dez/2025, Jan/2026 |
+            """)
+
+        with st.expander("📥 Lista de Empresas (aba Empresas)"):
+            st.markdown("""
+            **Arquivo:** `empresas_YYYYMMDD.xlsx`
+
+            | Coluna | Descrição |
+            |--------|-----------|
+            | CNPJ | Identificação fiscal |
+            | Razão Social | Nome oficial |
+            | Endereço / Bairro / CEP | Localização completa |
+            | Cidade / UF | Estado e cidade |
+            | Data Credenciamento | Data do credenciamento |
+            | Representante | Representante comercial |
+            | Já Usou Voucher | Se a empresa já utilizou voucher |
+            | Acumulado Vouchers | Total histórico de vouchers |
+            | Coletas 2025 | Vouchers utilizados em 2025 |
+            | Última Coleta | Data da última utilização |
+            | Último Voucher | Data do último voucher |
+            | Dias s/ Coleta | Dias desde a última utilização |
+            | Status | Ativa ou Inativa (regra de 365 dias) |
+            | PCLs na Cidade | Qtd. de PCLs na mesma cidade |
+            | PCLs Ativos / Inativos | Qtd. de PCLs ativos e inativos na cidade |
+            """)
+
+        with st.expander("📥 Análise 1: PCLs sem Empresas"):
+            st.markdown("""
+            **Arquivo:** `pcls_sem_empresas_YYYYMMDD.xlsx`
+
+            | Coluna | Descrição |
+            |--------|-----------|
+            | CNPJ | Identificação fiscal |
+            | Razão Social / Nome Fantasia | Nomes do PCL |
+            | Data Credenciamento | Data do credenciamento |
+            | Aceita Voucher | Se aceita pagamento via voucher |
+            | Valor Exame | Valor cobrado por coleta |
+            | Coletas Total / Coletas Ano | Acumulado geral e do ano |
+            | Última Coleta | Data da última coleta |
+            | Ativo/Inativo | Status (regra de 90 dias) |
+            | Representante | Representante comercial |
+            | Cidade / UF | Localização |
+            | Transportadora / Frequência | Dados logísticos |
+            """)
+
+        with st.expander("📥 Análise 2: PCLs c/ Empresas Inativas"):
+            st.markdown("""
+            **Arquivo:** `pcls_empresas_inativas_YYYYMMDD.xlsx`
+
+            Mesmas colunas da Análise 1, acrescida de:
+
+            | Coluna adicional | Descrição |
+            |------------------|-----------|
+            | Empresas Inativas na Cidade | Qtd. de empresas inativas (365 dias) na cidade do PCL |
+            """)
+
+        with st.expander("📥 Análise 3: Empresas sem PCL"):
+            st.markdown("""
+            **Arquivo:** `empresas_sem_pcl_YYYYMMDD.xlsx`
+
+            | Coluna | Descrição |
+            |--------|-----------|
+            | CNPJ | Identificação fiscal |
+            | Razão Social / Nome Fantasia | Nomes da empresa |
+            | Data Credenciamento | Data do credenciamento |
+            | Vouchers Total / Vouchers Ano | Acumulado geral e do ano |
+            | Última Utilização | Data da última utilização de voucher |
+            | Último Voucher | Data do último voucher |
+            | Ativo/Inativo | Status (regra de 365 dias) |
+            | Representante | Representante comercial |
+            | Cidade / UF | Localização |
+            """)
+
+        with st.expander("📥 Análise 4: Empresas c/ PCL Inativo"):
+            st.markdown("""
+            **Arquivo:** `empresas_pcls_inativos_YYYYMMDD.xlsx`
+
+            Mesmas colunas da Análise 3, acrescida de:
+
+            | Coluna adicional | Descrição |
+            |------------------|-----------|
+            | PCLs Inativos na Cidade | Qtd. de PCLs inativos (90 dias) na cidade da empresa |
+            """)
+
+        with st.expander("📥 Top PCLs por Volume"):
+            st.markdown("""
+            **Arquivo:** `top_pcls_YYYYMMDD.xlsx`
+
+            | Coluna | Descrição |
+            |--------|-----------|
+            | CNPJ | Identificação fiscal |
+            | Razão Social | Nome oficial |
+            | Representante | Representante comercial |
+            | Cidade / UF | Localização |
+            | Transportadora / Frequência | Dados logísticos |
+            | Total Coletas | Acumulado de coletas (ordenado decrescente) |
+            | Status | Ativo ou Inativo |
+            """)
+
+        with st.expander("📥 Acompanhamento por Representante"):
+            st.markdown("""
+            **3 downloads disponíveis:**
+
+            **PCLs no Período** (`pcls_representante_YYYYMMDD.xlsx`):
+
+            | Coluna | Descrição |
+            |--------|-----------|
+            | CNPJ / Razão Social | Identificação do PCL |
+            | Cidade / UF | Localização |
+            | Representante | Representante responsável |
+            | Data Credenciamento | Data do credenciamento |
+            | Coletas | Acumulado de coletas |
+            | Status | Ativo ou Inativo |
+
+            **Empresas no Período** (`empresas_representante_YYYYMMDD.xlsx`):
+
+            | Coluna | Descrição |
+            |--------|-----------|
+            | CNPJ / Razão Social | Identificação da empresa |
+            | Cidade / UF | Localização |
+            | Representante | Representante responsável |
+            | Data Credenciamento | Data do credenciamento |
+            | Vouchers | Acumulado de vouchers |
+            | Status | Ativa ou Inativa |
+
+            **Resumo por Representante** (`resumo_representantes_YYYYMMDD.xlsx`):
+
+            | Coluna | Descrição |
+            |--------|-----------|
+            | Representante | Nome do representante |
+            | PCLs Credenciados | Qtd. de PCLs no período |
+            | Total Coletas | Soma de coletas dos PCLs |
+            | PCLs Ativos | PCLs ativos do representante |
+            | Empresas Credenciadas | Qtd. de empresas no período |
+            | Total Vouchers | Soma de vouchers das empresas |
+            | Empresas Ativas | Empresas ativas do representante |
+            | Total Credenciamentos | Soma de PCLs + empresas |
+            """)
+
+        with st.expander("📥 PCLs sem Coleta Recente"):
+            st.markdown("""
+            **Arquivo:** `pcls_sem_coleta_recente_YYYYMMDD.xlsx`
+
+            | Coluna | Descrição |
+            |--------|-----------|
+            | CNPJ / Razão Social | Identificação do PCL |
+            | Cidade / UF | Localização |
+            | Representante | Representante comercial |
+            | Status | Ativo ou Inativo |
+            | Coletas Total | Acumulado histórico |
+            | Última Coleta | Data da última coleta |
+            | Dias s/ Coleta | Dias desde a última coleta |
+            | Nov/2025, Dez/2025, Jan/2026 | Coletas nos últimos 3 meses disponíveis |
+            """)
+
+        with st.expander("📥 PCLs com Capacidade Ociosa"):
+            st.markdown("""
+            **Arquivo:** `pcls_capacidade_ociosa_YYYYMMDD.xlsx`
+
+            | Coluna | Descrição |
+            |--------|-----------|
+            | CNPJ / Razão Social | Identificação do PCL |
+            | Cidade / UF | Localização |
+            | Representante | Representante comercial |
+            | Coletas 2025 | Coletas realizadas no ano |
+            | Capacidade 2025 | Volume máximo definido |
+            | % Utilização | Percentual da capacidade usada |
+            | Valor Coleta | Valor cobrado por coleta |
+            | Status | Ativo ou Inativo |
+            """)
+
+        with st.expander("📥 Finalidade por Estado"):
+            st.markdown("""
+            **Arquivo:** `finalidade_por_uf_YYYYMMDD.xlsx`
+
+            | Coluna | Descrição |
+            |--------|-----------|
+            | UF | Sigla do estado |
+            | CNH | Total de coletas para habilitação |
+            | CLT | Total de coletas trabalhistas |
+            | Outro | Total para outras finalidades |
+            | Concurso Público | Total para concursos |
+            | Total | Soma de todas as finalidades |
+            """)
+
+        with st.expander("📥 Relatório de Qualidade"):
+            st.markdown("""
+            **Arquivo:** `qualidade_dados_YYYYMMDD.xlsx` (múltiplas abas)
+
+            **Aba "Resumo":**
+
+            | Coluna | Descrição |
+            |--------|-----------|
+            | Métrica | Nome da métrica de qualidade |
+            | Quantidade | Valor da métrica |
+
+            **Abas "Ofensores PCLs" e "Ofensores Empresas":**
+
+            | Coluna | Descrição |
+            |--------|-----------|
+            | Entidade | Nome do PCL ou empresa |
+            | CNPJ | Identificação fiscal |
+            | Cidade / UF | Localização |
+            | Representante | Representante responsável |
+            | Campo | Campo com problema |
+            | Problema | Descrição do problema encontrado |
+            | Valor Atual | Valor registrado no campo |
+            | Severidade | Crítico, Alto, Médio ou Baixo |
+
+            **Aba "Por Tipo de Problema":**
+
+            | Coluna | Descrição |
+            |--------|-----------|
+            | Tipo de Problema | Categoria do problema |
+            | Severidade | Grau de impacto |
+            | Quantidade | Ocorrências encontradas |
+            """)
+
+        with st.expander("📥 PCLs Descredenciados (Visão Geral)"):
+            st.markdown("""
+            **Arquivo:** `pcls_descredenciados.xlsx`
+
+            Contém todos os dados originais dos PCLs que tiveram o credenciamento revogado. Disponível dentro do expander "Ver PCLs Descredenciados" na aba Visão Geral.
+
+            | Coluna | Descrição |
+            |--------|-----------|
+            | CNPJ | Identificação fiscal |
+            | Razão Social | Nome oficial |
+            | Nome Fantasia | Nome comercial |
+            | Cidade / UF | Localização |
+            | Representante | Representante comercial |
+            """)
+
+        st.markdown("---")
+        st.info("""
+        **Observações gerais:**
+        - Os arquivos são nomeados com a data do download (`YYYYMMDD`)
+        - Filtros de **Estado**, **Cidade** e **Período** são aplicados antes da exportação
+        - Colunas adicionais selecionadas na aba PCLs também são incluídas no download
+        - Para abrir no Excel, basta clicar no arquivo baixado
+        """)
 
     with subtab5:
         st.markdown("### Problemas Comuns e Soluções")

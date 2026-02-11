@@ -4304,9 +4304,16 @@ with tab_ajuda:
 
         st.markdown("### Como filtrar os dados?")
         st.markdown("""
-        Os filtros **ESTADO** e **CIDADE** estão disponíveis diretamente nas abas de **PCLs** e **Empresas**.
-        - Selecione "Todos" para ver todos os registros
+        **Filtros de Estado e Cidade** estão disponíveis nas abas **Coletas**, **PCLs** e **Empresas**.
+        - Selecione "Todos" / "Todas" para ver todos os registros
         - Os filtros afetam os dados exibidos e também os downloads em Excel
+
+        **Filtro de Período** está disponível em todas as abas principais (**Visão Geral**, **Coletas**, **PCLs**, **Empresas**).
+        - Opções: Últimos 30 dias, 90 dias, 6 meses, 1 ano ou Personalizado
+        - No modo Personalizado, escolha Data Inicial e Data Final livremente
+        - Nos demais modos, as datas são calculadas automaticamente
+
+        **Botão "Limpar Filtros"** restaura todos os filtros da aba para os valores padrão.
         """)
 
     with subtab2:
@@ -4396,18 +4403,31 @@ Planilha Excel (Total na planilha)
     with subtab3:
         st.markdown("### Métricas da Visão Geral")
         st.markdown("""
-        A aba **Visão Geral** exibe as seguintes métricas principais:
-        
+        A aba **Visão Geral** exibe as seguintes métricas:
+
+        **Linha 1 — Resumo:**
         | Métrica | Descrição |
         |---------|-----------|
-        | **Total PCLs** | Quantidade total de PCLs no sistema (excluindo PCLs descredenciados - campo técnico "Ativo em Coletas" = False) |
+        | **Total PCLs** | PCLs credenciados (exclui descredenciados) |
         | **PCLs Inativos** | PCLs sem coleta há mais de 90 dias |
-        | **Total Empresas** | Quantidade total de empresas credenciadas |
+        | **Total Empresas** | Empresas credenciadas no sistema |
         | **Empresas Inativas** | Empresas sem uso de voucher há mais de 365 dias |
-        | **Total Coletas** | Soma de todas as coletas realizadas (histórico) |
-        | **Total Vouchers** | Soma de todos os vouchers utilizados (histórico) |
-        | **Média de Coletas** | Média de coletas por PCL (Total Coletas ÷ Total PCLs) |
-        | **Cobertura** | Quantidade de estados e cidades atendidas |
+
+        **Linha 2 — Volumes:**
+        | Métrica | Descrição |
+        |---------|-----------|
+        | **Total Coletas** | Soma de todas as coletas realizadas (acumulado) |
+        | **Total Vouchers** | Soma de todos os vouchers utilizados (acumulado) |
+        | **Cobertura** | Quantidade de UFs e cidades com PCL |
+        | **Média de Coletas** | Total Coletas ÷ Total PCLs |
+
+        **Seção — Status e Distribuição:**
+        | Métrica | Descrição |
+        |---------|-----------|
+        | **PCLs Ativos** | Barra de progresso com percentual de PCLs ativos |
+        | **Empresas Ativas** | Barra de progresso com percentual de empresas ativas |
+        | **Top 5 UFs (PCLs)** | Estados com maior quantidade de PCLs |
+        | **Top 5 UFs (Empresas)** | Estados com maior quantidade de empresas |
         """)
         
         st.markdown("### Colunas da Listagem de PCLs")
@@ -4528,7 +4548,7 @@ Planilha Excel (Total na planilha)
 
         with st.expander("8. PCLs sem coleta recente (3 meses)"):
             st.markdown("""
-            Lista PCLs que **nao realizaram nenhuma coleta** nos ultimos 3 meses disponiveis (Nov/2025, Dez/2025, Jan/2026).
+            Lista PCLs que **nao realizaram nenhuma coleta** nos ultimos 3 meses disponiveis.
 
             **Inclui dados de contato** (e-mail e telefone) para facilitar o follow-up.
 
@@ -4537,7 +4557,7 @@ Planilha Excel (Total na planilha)
 
         with st.expander("9. PCLs com capacidade ociosa"):
             st.markdown("""
-            Lista PCLs onde as **coletas realizadas em 2025 sao inferiores a 50%** da capacidade maxima definida.
+            Lista PCLs onde as **coletas realizadas no ano sao inferiores a 50%** da capacidade maxima definida.
 
             Exibe a porcentagem de utilizacao para priorizar acoes.
 
@@ -4620,8 +4640,14 @@ Planilha Excel (Total na planilha)
         | **PCL** | Ponto de Coleta/Laboratório credenciado |
         | **Voucher** | Crédito para pagamento de coletas |
         | **Credenciamento** | Cadastro e autorização no sistema |
-        | **Status Ativo** | Entidade com atividade recente |
+        | **Status Ativo** | Entidade com atividade recente (PCL: coleta nos últimos 90 dias; Empresa: voucher nos últimos 365 dias) |
         | **Status Inativo** | Entidade sem atividade por período prolongado |
+        | **Descredenciado** | PCL com credenciamento revogado, excluído de todas as análises |
+        | **Representante** | Representante comercial responsável pelo PCL ou empresa |
+        | **Transportadora** | Empresa de logística que realiza a coleta do material |
+        | **Frequência** | Periodicidade de coleta (Diário, Semanal, etc.) |
+        | **Ofensor** | Registro com problemas de cadastro identificados na aba Qualidade |
+        | **Período** | Filtro temporal que limita os dados por data de última coleta/uso |
         """)
 
     with subtab6:

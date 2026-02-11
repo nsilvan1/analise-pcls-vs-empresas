@@ -12,6 +12,20 @@ from sp_connector import get_sp_connector, SPConnector
 from auth_microsoft import MicrosoftAuth, AuthManager, create_login_page, create_user_header
 
 # ============================================
+# CONSTANTES
+# ============================================
+
+PERIODO_OPTIONS = {
+    "Todos": None,
+    "Último Mês": 1,
+    "Últimos 3 Meses": 3,
+    "Últimos 6 Meses": 6,
+    "Últimos 9 Meses": 9,
+    "Últimos 12 Meses": 12,
+    "Personalizado": "custom"
+}
+
+# ============================================
 # CONFIGURAÇÃO DA PÁGINA
 # ============================================
 st.set_page_config(
@@ -685,7 +699,7 @@ def calcular_metricas_qualidade(df_ofensores, total_pcls, total_empresas):
 # COMPONENTES DE UI
 # ============================================
 
-def create_metric_card(title, value, subtitle="", trend=None, trend_color="green"):
+def create_metric_card(title, value, subtitle="", trend=None, trend_color="green", help=None):
     """Cria um card de métrica usando st.metric"""
     try:
         # Usar st.metric nativo que é mais confiável
@@ -696,7 +710,8 @@ def create_metric_card(title, value, subtitle="", trend=None, trend_color="green
         st.metric(
             label=title,
             value=value,
-            delta=delta
+            delta=delta,
+            help=help
         )
 
         if subtitle:
@@ -707,7 +722,7 @@ def create_metric_card(title, value, subtitle="", trend=None, trend_color="green
         if subtitle:
             st.caption(subtitle)
 
-def create_section_header(icon, title, subtitle=""):
+def create_section_header(icon, title, subtitle="", help=None):
     """Cria um cabeçalho de seção moderno"""
     try:
         title_clean = str(title).replace('"', '').replace("'", "")
@@ -716,7 +731,12 @@ def create_section_header(icon, title, subtitle=""):
         # Usar markdown nativo do Streamlit que respeita o tema
         st.markdown(f"## {icon_clean} {title_clean}")
         if subtitle:
-            st.caption(subtitle)
+            if help:
+                st.caption(subtitle, help=help)
+            else:
+                st.caption(subtitle)
+        elif help:
+            st.caption("", help=help)
     except Exception as e:
         st.error(f"Erro: {str(e)}")
 
@@ -724,13 +744,25 @@ def create_section_header(icon, title, subtitle=""):
 # FUNÇÕES DE GRÁFICOS
 # ============================================
 
+def chart_title_with_tooltip(title, tooltip):
+    """Renderiza titulo de grafico com tooltip nativo ao passar o mouse sobre o texto"""
+    st.markdown(
+        f'<p style="text-align:center; font-size:15px; font-weight:600; margin-bottom:0; cursor:help;" title="{tooltip}">{title}</p>',
+        unsafe_allow_html=True
+    )
+
 def create_bar_chart(df, x_col, y_col, title, max_items=12, color='#22C55E', sort_by_alpha=False):
     """Cria gráfico de barras horizontal moderno
-    
+
     Args:
         sort_by_alpha: Se True, ordena alfabeticamente por x_col. Se False, ordena por y_col (quantidade)
     """
     df_chart = df.copy()
+
+    # Remover linhas onde x_col está vazio, None ou NaN
+    df_chart = df_chart[df_chart[x_col].notna()]
+    df_chart = df_chart[df_chart[x_col].astype(str).str.strip() != '']
+
     if sort_by_alpha:
         # Ordenar alfabeticamente por x_col (nome da cidade/estado)
         df_chart = df_chart.sort_values(x_col, ascending=True)
@@ -748,7 +780,7 @@ def create_bar_chart(df, x_col, y_col, title, max_items=12, color='#22C55E', sor
     fig = go.Figure()
 
     valores_x = [float(x) if pd.notna(x) and np.isfinite(x) else 0.0 for x in df_chart[y_col]]
-    valores_y = [str(y) if pd.notna(y) else "" for y in df_chart[x_col]]
+    valores_y = [str(y).strip() for y in df_chart[x_col]]
 
     fig.add_trace(go.Bar(
         x=valores_x,
@@ -777,14 +809,14 @@ def create_bar_chart(df, x_col, y_col, title, max_items=12, color='#22C55E', sor
             y=0.97
         ),
         xaxis=dict(
-            title="",
+            title=None,
             showgrid=True,
             gridcolor='rgba(128,128,128,0.2)',
             showline=False,
             zeroline=False
         ),
         yaxis=dict(
-            title="",
+            title=None,
             showline=False
         ),
         plot_bgcolor='rgba(0,0,0,0)',
@@ -804,7 +836,11 @@ def create_grouped_bar_chart(df, x_col, title, colors=None, max_items=10, labels
         labels = {'Ativo': 'Ativos', 'Inativo': 'Inativos'}
 
     try:
-        df_chart = df.groupby([x_col, 'status']).size().reset_index(name='Quantidade')
+        # Remover linhas com x_col vazio ou None
+        df_clean = df[df[x_col].notna()].copy()
+        df_clean = df_clean[df_clean[x_col].astype(str).str.strip() != '']
+
+        df_chart = df_clean.groupby([x_col, 'status']).size().reset_index(name='Quantidade')
         df_pivot = df_chart.pivot(index=x_col, columns='status', values='Quantidade').fillna(0)
 
         # Garantir que valores sejam numéricos válidos
@@ -873,14 +909,14 @@ def create_grouped_bar_chart(df, x_col, title, colors=None, max_items=10, labels
             y=0.97
         ),
         xaxis=dict(
-            title="",
+            title=None,
             showgrid=True,
             gridcolor='rgba(128,128,128,0.2)',
             showline=False,
             zeroline=False
         ),
         yaxis=dict(
-            title="",
+            title=None,
             showline=False
         ),
         barmode='group',
@@ -903,22 +939,23 @@ def create_grouped_bar_chart(df, x_col, title, colors=None, max_items=10, labels
 
     return fig
 
-def create_progress_card(title, value, total, color="#22C55E"):
+def create_progress_card(title, value, total, color="#22C55E", help=None):
     """Cria um card com barra de progresso usando st.progress"""
     try:
         value = float(value) if value is not None else 0
         total = float(total) if total is not None else 0
         percentage = (value / total * 100) if total > 0 else 0
         percentage = min(100, max(0, percentage))
-        
+
         value_str = format_number(int(value))
         total_str = format_number(int(total))
         percentage_val = percentage / 100
-        
+
         # Usar st.metric e st.progress nativos
         st.metric(
             label=title,
-            value=value_str
+            value=value_str,
+            help=help
         )
         
         st.progress(percentage_val)
@@ -926,7 +963,7 @@ def create_progress_card(title, value, total, color="#22C55E"):
     except Exception as e:
         st.error(f"Erro: {str(e)}")
 
-def create_top_list_card(title, data_dict, color="#22C55E"):
+def create_top_list_card(title, data_dict, color="#22C55E", help=None):
     """Cria um card com lista de top items usando gráfico simples"""
     try:
         if not data_dict or len(data_dict) == 0:
@@ -936,13 +973,18 @@ def create_top_list_card(title, data_dict, color="#22C55E"):
 
         # Converter dict para DataFrame
         df_top = pd.DataFrame(list(data_dict.items())[:5], columns=['UF', 'Quantidade'])
+
+        # Remover linhas com labels vazios ou None
+        df_top = df_top[df_top['UF'].notna()]
+        df_top = df_top[df_top['UF'].astype(str).str.strip() != '']
+
         df_top = df_top.sort_values('Quantidade', ascending=False)
 
         # Criar gráfico de barras horizontal simples
         fig = go.Figure()
 
         valores = [float(x) if pd.notna(x) and np.isfinite(x) else 0.0 for x in df_top['Quantidade']]
-        ufs = [str(x) if pd.notna(x) else "" for x in df_top['UF']]
+        ufs = [str(x).strip() for x in df_top['UF']]
 
         fig.add_trace(go.Bar(
             x=valores,
@@ -956,16 +998,20 @@ def create_top_list_card(title, data_dict, color="#22C55E"):
         ))
 
         fig.update_layout(
-            title=dict(text=title, font=dict(size=13), x=0.5),
+            title=None,
             xaxis=dict(title="", showgrid=True, gridcolor='rgba(128,128,128,0.2)'),
             yaxis=dict(title=""),
             plot_bgcolor='rgba(0,0,0,0)',
             paper_bgcolor='rgba(0,0,0,0)',
             height=220,
-            margin=dict(l=10, r=60, t=40, b=10),
+            margin=dict(l=10, r=60, t=10, b=10),
             showlegend=False
         )
 
+        if help:
+            chart_title_with_tooltip(title, help)
+        else:
+            st.markdown(f'<p style="text-align:center; font-size:13px; font-weight:600; margin-bottom:0;">{title}</p>', unsafe_allow_html=True)
         st.plotly_chart(fig, use_container_width=True)
     except Exception as e:
         st.error(f"Erro: {str(e)}")
@@ -1518,6 +1564,22 @@ def normalize_column_names(df):
         'novembro/2025': 'coletas_nov_2025',
         'dezembro/2025': 'coletas_dez_2025',
         'janeiro/2026': 'coletas_jan_2026',
+        # Finalidade - Detalhado (Novo - ADD-XXX)
+        'total cnh': 'finalidade_cnh',
+        'total clt (tipo)': 'finalidade_clt',
+        'cnh - primeira habilitação': 'cnh_primeira_habilitacao',
+        'cnh - primeira habilitacao': 'cnh_primeira_habilitacao',
+        'cnh - renovação': 'cnh_renovacao',
+        'cnh - renovacao': 'cnh_renovacao',
+        'cnh - mudança de categoria': 'cnh_mudanca_categoria',
+        'cnh - mudanca de categoria': 'cnh_mudanca_categoria',
+        'clt - admissional': 'clt_admissional',
+        'clt - demissional': 'clt_demissional',
+        'clt - periódico': 'clt_periodico',
+        'clt - periodico': 'clt_periodico',
+        'clt - retorno ao trabalho': 'clt_retorno_trabalho',
+        'clt - mudança de função': 'clt_mudanca_funcao',
+        'clt - mudanca de funcao': 'clt_mudanca_funcao',
     }
     
     # Aplicar mapeamento direto
@@ -1543,6 +1605,9 @@ def normalize_column_names(df):
             df.rename(columns={col: 'dias_sem_coleta_voucher'}, inplace=True)
         elif 'dias_sem_coleta_nao_voucher' not in df.columns and 'dias sem coleta' in col_lower and 'voucher' in col_lower and ('n' in col_lower.split('voucher')[0][-5:] or 'nao' in col_lower or 'não' in col_lower):
             df.rename(columns={col: 'dias_sem_coleta_nao_voucher'}, inplace=True)
+    
+    # ADD-XXX: Remover colunas duplicadas após normalização para evitar erros
+    df = df.loc[:, ~df.columns.duplicated()]
     
     return df
 
@@ -1749,6 +1814,8 @@ def process_labs(df_labs):
         'volume_maximo_coletas_2023', 'volume_maximo_coletas_2024', 'volume_maximo_coletas_2025',
         'finalidade_cnh', 'finalidade_clt', 'finalidade_outro', 'finalidade_concurso_publico',
         'cnh_fe', 'cnh_fc', 'clt_fe', 'clt_fc',
+        'cnh_primeira_habilitacao', 'cnh_renovacao', 'cnh_mudanca_categoria',
+        'clt_admissional', 'clt_demissional', 'clt_periodico', 'clt_retorno_trabalho', 'clt_mudanca_funcao',
         'valor_total_coleta',
         'coletas_nov_2025', 'coletas_dez_2025', 'coletas_jan_2026',
         'dias_desde_credenciamento',
@@ -1815,19 +1882,174 @@ def normalize_city_column(df, column='cidade'):
         df[column] = df[column].apply(normalize_city_name)
     return df
 
-def apply_filters(df, estado, cidade):
-    """Aplica filtros ao dataframe (sem copiar desnecessariamente)"""
-    if estado == "Todos" and cidade == "Todas":
+def apply_filters(df, estado, cidade, periodo_inicio=None, periodo_fim=None, date_column='data_ultima_coleta'):
+    """
+    Aplica filtros de estado, cidade e período ao dataframe de forma otimizada.
+
+    Args:
+        df: DataFrame a ser filtrado
+        estado: Estado selecionado ("Todos" para nenhum filtro)
+        cidade: Cidade selecionada ("Todas" para nenhum filtro)
+        periodo_inicio: Data inicial para filtro de período (opcional)
+        periodo_fim: Data final para filtro de período (opcional)
+        date_column: Nome da coluna de data a ser filtrada (default: 'data_ultima_coleta')
+
+    Returns:
+        DataFrame filtrado
+    """
+    # Retornar cópia para evitar modificar o original
+    if estado == "Todos" and cidade == "Todas" and periodo_inicio is None:
         return df
 
-    mask = pd.Series([True] * len(df), index=df.index)
+    # Usar .loc para filtros mais eficientes
+    result = df
 
-    if estado != "Todos" and 'uf' in df.columns:
-        mask &= (df['uf'] == estado)
-    if cidade != "Todas" and 'cidade' in df.columns:
-        mask &= (df['cidade'] == cidade)
+    if estado != "Todos" and 'uf' in result.columns:
+        result = result[result['uf'] == estado]
 
-    return df[mask]
+    if cidade != "Todas" and 'cidade' in result.columns:
+        result = result[result['cidade'] == cidade]
+
+    # Filtro de período otimizado
+    if periodo_inicio is not None and periodo_fim is not None and date_column in result.columns:
+        # Converter para datetime apenas uma vez e cachear
+        if not pd.api.types.is_datetime64_any_dtype(result[date_column]):
+            date_series = pd.to_datetime(result[date_column], errors='coerce')
+        else:
+            date_series = result[date_column]
+
+        result = result[(date_series >= periodo_inicio) & (date_series < periodo_fim)]
+
+    return result
+
+def get_period_date_range(periodo_key, data_inicio_custom=None, data_fim_custom=None):
+    """
+    Calcula intervalo de datas baseado no período selecionado.
+
+    Args:
+        periodo_key: String da opção selecionada (ex: "Últimos 3 Meses", "Personalizado")
+        data_inicio_custom: Data inicial quando período é "Personalizado"
+        data_fim_custom: Data final quando período é "Personalizado"
+
+    Returns:
+        tuple: (data_inicio, data_fim) como pd.Timestamp ou (None, None) se "Todos"
+    """
+    if periodo_key == "Todos" or periodo_key is None:
+        return None, None
+
+    if periodo_key == "Personalizado":
+        if data_inicio_custom and data_fim_custom:
+            data_inicio = pd.to_datetime(data_inicio_custom)
+            data_fim = pd.to_datetime(data_fim_custom) + timedelta(days=1)  # Incluir dia final
+            return data_inicio, data_fim
+        return None, None
+
+    # Períodos predefinidos
+    meses = PERIODO_OPTIONS.get(periodo_key)
+    if meses:
+        hoje = pd.Timestamp.now().normalize()
+        data_inicio = hoje - timedelta(days=meses * 30)  # Aproximação: 30 dias por mês
+        data_fim = hoje
+        return data_inicio, data_fim
+
+    return None, None
+
+def render_period_filter(key_prefix, on_clear=None, clear_key=None):
+    """
+    Renderiza filtro de período com selectbox e date range picker sempre visível.
+
+    Args:
+        key_prefix: Prefixo para as keys do session state (ex: "vg", "coletas", "pcls", "emp")
+        on_clear: Callback opcional para botão "Limpar Filtros" na mesma linha
+        clear_key: Key do botão Limpar (obrigatório se on_clear fornecido)
+
+    Returns:
+        tuple: (data_inicio, data_fim) ou (None, None) se nenhum filtro ativo
+    """
+    # Mapeamento de opções do selectbox
+    periodo_options = {
+        "Todos": None,
+        "Últimos 30 dias": 30,
+        "Últimos 90 dias": 90,
+        "Últimos 6 meses": 180,
+        "Último ano": 365,
+        "Personalizado": "custom"
+    }
+
+    # Layout: Selectbox | Data Inicial | Data Final | (Limpar opcional)
+    if on_clear:
+        col_select, col_date1, col_date2, col_limpar = st.columns([2, 2, 2, 1])
+    else:
+        col_select, col_date1, col_date2 = st.columns([2, 2, 2])
+
+    with col_select:
+        periodo_key = st.selectbox(
+            "Período",
+            options=list(periodo_options.keys()),
+            key=f"select_periodo_{key_prefix}",
+            help="Selecione o período de análise"
+        )
+
+    periodo_value = periodo_options[periodo_key]
+
+    # Calcular datas baseado no período selecionado
+    hoje = datetime.now().date()
+
+    if periodo_value is None:
+        # "Todos" - valores padrão mas desabilitados
+        data_inicio_display = hoje - timedelta(days=365)
+        data_fim_display = hoje
+        is_disabled = True
+    elif periodo_value == "custom":
+        # "Personalizado" - permitir edição
+        data_inicio_display = st.session_state.get(f"data_inicio_{key_prefix}", hoje - timedelta(days=90))
+        data_fim_display = st.session_state.get(f"data_fim_{key_prefix}", hoje)
+        is_disabled = False
+    else:
+        # Período predefinido - calcular automaticamente e desabilitar
+        data_inicio_display = hoje - timedelta(days=periodo_value)
+        data_fim_display = hoje
+        is_disabled = True
+
+    # Sempre mostrar date pickers
+    with col_date1:
+        data_inicio_input = st.date_input(
+            "Data Inicial",
+            value=data_inicio_display,
+            key=f"data_inicio_display_{key_prefix}",
+            disabled=is_disabled
+        )
+
+    with col_date2:
+        data_fim_input = st.date_input(
+            "Data Final",
+            value=data_fim_display,
+            key=f"data_fim_display_{key_prefix}",
+            disabled=is_disabled
+        )
+
+    if on_clear:
+        with col_limpar:
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.button("Limpar Filtros", key=clear_key, on_click=on_clear)
+
+    # Retornar datas calculadas
+    if periodo_value is None:
+        # "Todos" selecionado - sem filtro
+        return None, None
+    elif periodo_value == "custom":
+        # "Personalizado" selecionado - usar valores dos date pickers editados pelo usuário
+        if data_inicio_input and data_fim_input:
+            data_inicio = pd.to_datetime(data_inicio_input)
+            data_fim = pd.to_datetime(data_fim_input) + timedelta(days=1)
+            return data_inicio, data_fim
+        return None, None
+    else:
+        # Período predefinido - calcular baseado no período
+        hoje_ts = pd.Timestamp.now().normalize()
+        data_inicio = hoje_ts - timedelta(days=periodo_value)
+        data_fim = hoje_ts
+        return data_inicio, data_fim
 
 def prepare_display_dataframe(df, colunas_desejadas, rename_map):
     """
@@ -1979,6 +2201,15 @@ st.markdown("---")
 # CONTEÚDO PRINCIPAL - NAVEGAÇÃO POR ABAS
 # ============================================
 
+def _limpar_filtro_visao_geral():
+    """Callback para limpar filtros da aba Visão Geral"""
+    st.session_state["select_periodo_vg"] = "Todos"
+    if "data_inicio_display_vg" in st.session_state:
+        del st.session_state["data_inicio_display_vg"]
+    if "data_fim_display_vg" in st.session_state:
+        del st.session_state["data_fim_display_vg"]
+    st.toast("Filtros limpos!", icon="🔄")
+
 def _limpar_filtro_visao_estado():
     """Callback para limpar filtro da aba Por Estado"""
     st.session_state["estado_visao_uf"] = "Todos"
@@ -1987,7 +2218,8 @@ def _limpar_filtro_visao_estado():
 @st.fragment
 def _visao_estado_fragment():
     """Conteúdo da aba Por Estado. Fragment para que ao mudar o selectbox apenas esta parte rerun, mantendo a aba ativa."""
-    create_section_header("🗺️", "Visão por Estado", "Painel consolidado com métricas por UF")
+    create_section_header("🗺️", "Visão por Estado", "Painel consolidado com métricas por UF",
+                          help="Selecione um estado para ver metricas detalhadas de PCLs e empresas")
     estados_lista = []
     if not df_labs.empty and 'uf' in df_labs.columns:
         estados_lista = sorted(df_labs['uf'].dropna().unique().tolist())
@@ -2033,26 +2265,34 @@ def _visao_estado_fragment():
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         pct_ativos = (pcls_ativos_uf / total_pcls_uf * 100) if total_pcls_uf > 0 else 0
-        create_metric_card("Total PCLs", format_number(total_pcls_uf), f"{pct_ativos:.1f}% ativos", f"↗ {format_number(pcls_ativos_uf)} ativos", "green")
+        create_metric_card("Total PCLs", format_number(total_pcls_uf), f"{pct_ativos:.1f}% ativos", f"↗ {format_number(pcls_ativos_uf)} ativos", "green",
+                           help="Total de PCLs credenciados no estado selecionado")
     with col2:
-        create_metric_card("PCLs Inativos", format_number(pcls_inativos_uf), "Sem coleta há +90 dias", "", "gray")
+        create_metric_card("PCLs Inativos", format_number(pcls_inativos_uf), "Sem coleta há +90 dias", "", "gray",
+                           help="PCLs sem coleta nos ultimos 90 dias no estado selecionado")
     with col3:
         pct_ativas = (empresas_ativas_uf / total_empresas_uf * 100) if total_empresas_uf > 0 else 0
-        create_metric_card("Total Empresas", format_number(total_empresas_uf), f"{pct_ativas:.1f}% ativas", f"↗ {format_number(empresas_ativas_uf)} ativas", "green")
+        create_metric_card("Total Empresas", format_number(total_empresas_uf), f"{pct_ativas:.1f}% ativas", f"↗ {format_number(empresas_ativas_uf)} ativas", "green",
+                           help="Total de empresas credenciadas no estado selecionado")
     with col4:
-        create_metric_card("Empresas Inativas", format_number(empresas_inativas_uf), "Sem uso há +365 dias", "", "gray")
+        create_metric_card("Empresas Inativas", format_number(empresas_inativas_uf), "Sem uso há +365 dias", "", "gray",
+                           help="Empresas sem uso de voucher nos ultimos 365 dias no estado selecionado")
     st.markdown("")
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        create_metric_card("Total Coletas", format_number(int(total_coletas_uf)), "Acumulado de coletas", "", "gray")
+        create_metric_card("Total Coletas", format_number(int(total_coletas_uf)), "Acumulado de coletas", "", "gray",
+                           help="Soma de todas as coletas no estado selecionado")
     with col2:
-        create_metric_card("Total Vouchers", format_number(int(total_vouchers_uf)), "Acumulado de vouchers", "", "gray")
+        create_metric_card("Total Vouchers", format_number(int(total_vouchers_uf)), "Acumulado de vouchers", "", "gray",
+                           help="Soma de todos os vouchers no estado selecionado")
     with col3:
         cidades_pcl = df_labs_uf['cidade'].nunique() if not df_labs_uf.empty and 'cidade' in df_labs_uf.columns else 0
-        create_metric_card("Cidades c/ PCL", format_number(cidades_pcl), "Cobertura de PCLs", "", "gray")
+        create_metric_card("Cidades c/ PCL", format_number(cidades_pcl), "Cobertura de PCLs", "", "gray",
+                           help="Quantidade de cidades com pelo menos um PCL no estado")
     with col4:
         cidades_emp = df_empresas_uf['cidade'].nunique() if not df_empresas_uf.empty and 'cidade' in df_empresas_uf.columns else 0
-        create_metric_card("Cidades c/ Empresa", format_number(cidades_emp), "Cobertura de empresas", "", "gray")
+        create_metric_card("Cidades c/ Empresa", format_number(cidades_emp), "Cobertura de empresas", "", "gray",
+                           help="Quantidade de cidades com pelo menos uma empresa no estado")
     st.markdown("---")
     if estado_filtro != "Todos":
         create_section_header("📊", f"Distribuição por Cidade - {estado_filtro}")
@@ -2077,6 +2317,8 @@ def _visao_estado_fragment():
                     f"Top {MAX_CIDADES_GRAFICO} cidades (PCLs) - {estado_filtro}",
                     max_items=MAX_CIDADES_GRAFICO, color="#22C55E", sort_by_alpha=False
                 )
+                chart_title_with_tooltip(f"Top {MAX_CIDADES_GRAFICO} cidades (PCLs) - {estado_filtro}", "Top cidades com mais PCLs no estado selecionado")
+                fig.update_layout(title=None)
                 st.plotly_chart(fig, use_container_width=True)
                 # Tabela com todas as cidades (ordenada alfabeticamente)
                 st.caption("Todas as cidades (PCLs)")
@@ -2102,6 +2344,8 @@ def _visao_estado_fragment():
                     f"Top {MAX_CIDADES_GRAFICO} cidades (Empresas) - {estado_filtro}",
                     max_items=MAX_CIDADES_GRAFICO, color="#3B82F6", sort_by_alpha=False
                 )
+                chart_title_with_tooltip(f"Top {MAX_CIDADES_GRAFICO} cidades (Empresas) - {estado_filtro}", "Top cidades com mais empresas no estado selecionado")
+                fig.update_layout(title=None)
                 st.plotly_chart(fig, use_container_width=True)
                 st.caption("Todas as cidades (Empresas)")
                 st.dataframe(
@@ -2111,7 +2355,8 @@ def _visao_estado_fragment():
             else:
                 st.info("Sem dados de empresas para este estado.")
         st.markdown("---")
-    create_section_header("📋", "Tabela Resumo por Estado")
+    create_section_header("📋", "Tabela Resumo por Estado",
+                          help="Tabela consolidada com totais de PCLs, empresas e coletas por estado")
     if not df_labs.empty and 'uf' in df_labs.columns:
         pcl_agg = df_labs.groupby('uf').agg({
             'cnpj': 'count',
@@ -2177,28 +2422,41 @@ def _visao_estado_fragment():
 def _limpar_filtro_coletas():
     st.session_state["filtro_estado_coletas"] = "Todos"
     st.session_state["filtro_cidade_coletas"] = "Todas"
-    st.session_state["filtro_bairro_coletas"] = "Todos"
+    st.session_state["select_periodo_coletas"] = "Todos"
+    if "data_inicio_display_coletas" in st.session_state:
+        del st.session_state["data_inicio_display_coletas"]
+    if "data_fim_display_coletas" in st.session_state:
+        del st.session_state["data_fim_display_coletas"]
     st.toast("Filtros limpos!", icon="🔄")
 
 def _limpar_filtro_pcls():
     st.session_state["filtro_estado_pcl"] = "Todos"
     st.session_state["filtro_cidade_pcl"] = "Todas"
-    st.session_state["filtro_bairro_pcl"] = "Todos"
+    st.session_state["select_periodo_pcls"] = "Todos"
+    if "data_inicio_display_pcls" in st.session_state:
+        del st.session_state["data_inicio_display_pcls"]
+    if "data_fim_display_pcls" in st.session_state:
+        del st.session_state["data_fim_display_pcls"]
     st.toast("Filtros limpos!", icon="🔄")
 
 def _limpar_filtro_empresas():
     st.session_state["filtro_estado_emp"] = "Todos"
     st.session_state["filtro_cidade_emp"] = "Todas"
-    st.session_state["filtro_bairro_emp"] = "Todos"
+    st.session_state["select_periodo_emp"] = "Todos"
+    if "data_inicio_display_emp" in st.session_state:
+        del st.session_state["data_inicio_display_emp"]
+    if "data_fim_display_emp" in st.session_state:
+        del st.session_state["data_fim_display_emp"]
     st.toast("Filtros limpos!", icon="🔄")
 
 @st.fragment
 def _analise_coletas_fragment():
     """Conteúdo da aba Coletas. Fragment para manter a aba ativa ao mudar filtros."""
-    create_section_header("🔬", "Análise de Coletas", "Métricas detalhadas de coletas por estado e PCL")
+    create_section_header("🔬", "Análise de Coletas", "Métricas detalhadas de coletas por estado e PCL",
+                          help="Analise de volume, media e distribuicao de coletas com filtros por estado, cidade e bairro")
 
-    # Filtros
-    col_filtro1, col_filtro2, col_filtro3, col_filtro4 = st.columns([1, 1, 1, 1])
+    # Filtros de Estado e Cidade
+    col_filtro1, col_filtro2, col_filtro3 = st.columns([1, 1, 1])
 
     with col_filtro1:
         estados_coletas_lista = ['Todos'] + listas_filtros['pcl']['estados']
@@ -2212,23 +2470,21 @@ def _analise_coletas_fragment():
         cidade_coletas_selecionada = st.selectbox("Cidade", cidades_coletas_lista, key="filtro_cidade_coletas")
 
     with col_filtro3:
-        df_temp_coletas = df_labs.copy()
-        if estado_coletas_selecionado != "Todos":
-            df_temp_coletas = df_temp_coletas[df_temp_coletas['uf'] == estado_coletas_selecionado]
-        if cidade_coletas_selecionada != "Todas":
-            df_temp_coletas = df_temp_coletas[df_temp_coletas['cidade'] == cidade_coletas_selecionada]
-        bairros_coletas_lista = ['Todos'] + sorted(df_temp_coletas['bairro'].dropna().unique().tolist()) if 'bairro' in df_temp_coletas.columns else ['Todos']
-        bairros_coletas_lista = [b for b in bairros_coletas_lista if b and str(b).strip()]
-        bairro_coletas_selecionado = st.selectbox("Bairro", bairros_coletas_lista, key="filtro_bairro_coletas")
-
-    with col_filtro4:
         st.markdown("<br>", unsafe_allow_html=True)
-        st.button("Limpar Filtros", key="limpar_coletas", on_click=_limpar_filtro_coletas)
+        st.button("Limpar Filtros", key="limpar_estado_cidade_coletas", on_click=_limpar_filtro_coletas)
 
-    # Aplicar filtros
-    df_labs_coletas = apply_filters(df_labs, estado_coletas_selecionado, cidade_coletas_selecionada)
-    if bairro_coletas_selecionado != "Todos" and 'bairro' in df_labs_coletas.columns:
-        df_labs_coletas = df_labs_coletas[df_labs_coletas['bairro'] == bairro_coletas_selecionado]
+    # Filtro de Período (novo estilo)
+    periodo_inicio, periodo_fim = render_period_filter("coletas")
+
+    # Aplicar filtros (estado + cidade + período)
+    df_labs_coletas = apply_filters(
+        df_labs,
+        estado_coletas_selecionado,
+        cidade_coletas_selecionada,
+        periodo_inicio,
+        periodo_fim,
+        'data_ultima_coleta'
+    )
 
     if df_labs_coletas.empty or 'acumulado_coletas' not in df_labs_coletas.columns:
         st.warning("Dados de coletas não disponíveis para os filtros selecionados.")
@@ -2248,22 +2504,25 @@ def _analise_coletas_fragment():
             max_coletas = 0.0
             pcls_sem_coleta = 0
             pcls_com_coleta = 0
-
         col1, col2, col3, col4 = st.columns(4)
 
         with col1:
             total_coletas_int = int(total_coletas) if pd.notna(total_coletas) and np.isfinite(total_coletas) else 0
-            create_metric_card("Total de Coletas", format_number(total_coletas_int), "Acumulado geral", "", "gray")
+            create_metric_card("Total de Coletas", format_number(total_coletas_int), "Acumulado geral", "", "gray",
+                               help="Soma de todas as coletas realizadas pelos PCLs filtrados")
         with col2:
             media_int = int(media_coletas) if pd.notna(media_coletas) and np.isfinite(media_coletas) else 0
             mediana_int = int(mediana_coletas) if pd.notna(mediana_coletas) and np.isfinite(mediana_coletas) else 0
-            create_metric_card("Média por PCL", format_number(media_int), f"Mediana: {mediana_int}", "", "gray")
+            create_metric_card("Média por PCL", format_number(media_int), f"Mediana: {mediana_int}", "", "gray",
+                               help="Media aritmetica de coletas por PCL. Mediana indica o valor central")
         with col3:
             max_int = int(max_coletas) if pd.notna(max_coletas) and np.isfinite(max_coletas) else 0
-            create_metric_card("Máximo", format_number(max_int), "Maior volume", "", "gray")
+            create_metric_card("Máximo", format_number(max_int), "Maior volume", "", "gray",
+                               help="PCL com maior volume de coletas acumuladas")
         with col4:
             pct_com_coleta = (pcls_com_coleta / len(df_labs_coletas) * 100) if len(df_labs_coletas) > 0 else 0
-            create_metric_card("PCLs com Coleta", format_number(pcls_com_coleta), f"{pct_com_coleta:.1f}% do total", "", "gray")
+            create_metric_card("PCLs com Coleta", format_number(pcls_com_coleta), f"{pct_com_coleta:.1f}% do total", "", "gray",
+                               help="Quantidade de PCLs que ja realizaram pelo menos uma coleta")
 
         # Tendência Mensal e Capacidade
         colunas_mensais = {
@@ -2275,31 +2534,44 @@ def _analise_coletas_fragment():
         colunas_mensais_existentes = {k: v for k, v in colunas_mensais.items() if k in df_labs_coletas.columns}
         if colunas_mensais_existentes:
             st.markdown("---")
-            create_section_header("📅", "Tendencia Mensal")
+            create_section_header("📅", "Tendencia Mensal",
+                                  help="Coletas por periodo mensal. (Adicionado 09/02/2026)")
             cols_mensal = st.columns(len(colunas_mensais_existentes))
+            tooltips_mensais = {
+                'coletas_2023': 'Total de coletas realizadas em 2023. (Adicionado 09/02/2026)',
+                'coletas_nov_2025': 'Coletas realizadas em novembro/2025. (Adicionado 09/02/2026)',
+                'coletas_dez_2025': 'Coletas realizadas em dezembro/2025. (Adicionado 09/02/2026)',
+                'coletas_jan_2026': 'Coletas realizadas em janeiro/2026. (Adicionado 09/02/2026)',
+            }
             for i, (col_name, label) in enumerate(colunas_mensais_existentes.items()):
                 with cols_mensal[i]:
                     val = int(df_labs_coletas[col_name].sum())
-                    create_metric_card(label, format_number(val), "", "", "gray")
+                    create_metric_card(label, format_number(val), "", "", "gray",
+                                       help=tooltips_mensais.get(col_name))
 
         # Capacidade vs Realizado
         if 'volume_maximo_coletas_2025' in df_labs_coletas.columns and 'coletas_2025' in df_labs_coletas.columns:
             st.markdown("---")
-            create_section_header("📈", "Capacidade vs Realizado 2025")
+            create_section_header("📈", "Capacidade vs Realizado 2025",
+                                  help="Comparacao entre a capacidade maxima definida e as coletas efetivamente realizadas em 2025. (Adicionado 09/02/2026)")
             col1, col2, col3 = st.columns(3)
             cap_total = int(df_labs_coletas['volume_maximo_coletas_2025'].sum())
             real_total = int(df_labs_coletas['coletas_2025'].sum())
             with col1:
-                create_metric_card("Capacidade Total", format_number(cap_total), "Volume maximo 2025", "", "gray")
+                create_metric_card("Capacidade Total", format_number(cap_total), "Volume maximo 2025", "", "gray",
+                                   help="Soma do volume maximo de coletas definido para 2025. (Adicionado 09/02/2026)")
             with col2:
-                create_metric_card("Realizado", format_number(real_total), "Coletas 2025", "", "gray")
+                create_metric_card("Realizado", format_number(real_total), "Coletas 2025", "", "gray",
+                                   help="Total de coletas efetivamente realizadas em 2025. (Adicionado 09/02/2026)")
             with col3:
-                create_progress_card("Utilizacao", real_total, cap_total, "#8B5CF6")
+                create_progress_card("Utilizacao", real_total, cap_total, "#8B5CF6",
+                                     help="Percentual da capacidade maxima que foi utilizada. (Adicionado 09/02/2026)")
 
         st.markdown("---")
 
         # Coletas por Estado
-        create_section_header("📊", "Coletas por Estado")
+        create_section_header("📊", "Coletas por Estado",
+                              help="Total e media de coletas agrupados por estado")
 
         if 'uf' in df_labs_coletas.columns:
             coletas_estado = df_labs_coletas.groupby('uf').agg({
@@ -2330,14 +2602,14 @@ def _analise_coletas_fragment():
                 ))
 
                 fig.update_layout(
-                    title=dict(text="Total de Coletas por Estado (Top 12)", font=dict(size=15), x=0.5),
-                    xaxis=dict(title="", showgrid=True, gridcolor='rgba(128,128,128,0.2)'),
-                    yaxis=dict(title=""),
+                    xaxis=dict(title=None, showgrid=True, gridcolor='rgba(128,128,128,0.2)'),
+                    yaxis=dict(title=None),
                     plot_bgcolor='rgba(0,0,0,0)',
                     paper_bgcolor='rgba(0,0,0,0)',
                     height=450,
-                    margin=dict(l=10, r=70, t=50, b=20)
+                    margin=dict(l=10, r=70, t=20, b=20)
                 )
+                chart_title_with_tooltip("Total de Coletas por Estado (Top 12)", "Soma de todas as coletas por estado, ordenadas por volume")
                 st.plotly_chart(fig, use_container_width=True)
 
             with col2:
@@ -2360,20 +2632,21 @@ def _analise_coletas_fragment():
                 ))
 
                 fig.update_layout(
-                    title=dict(text="Média de Coletas por PCL (Top 12)", font=dict(size=15), x=0.5),
-                    xaxis=dict(title="", showgrid=True, gridcolor='rgba(128,128,128,0.2)'),
-                    yaxis=dict(title=""),
+                    xaxis=dict(title=None, showgrid=True, gridcolor='rgba(128,128,128,0.2)'),
+                    yaxis=dict(title=None),
                     plot_bgcolor='rgba(0,0,0,0)',
                     paper_bgcolor='rgba(0,0,0,0)',
                     height=450,
-                    margin=dict(l=10, r=70, t=50, b=20)
+                    margin=dict(l=10, r=70, t=20, b=20)
                 )
+                chart_title_with_tooltip("Média de Coletas por PCL (Top 12)", "Media de coletas por PCL em cada estado")
                 st.plotly_chart(fig, use_container_width=True)
 
             st.markdown("---")
 
             # Tabela detalhada
-            create_section_header("📋", "Tabela Detalhada por Estado")
+            create_section_header("📋", "Tabela Detalhada por Estado",
+                                  help="Tabela com total de coletas, media e quantidade de PCLs por estado")
 
             coletas_estado['Total Coletas'] = coletas_estado['Total Coletas'].fillna(0).astype(int)
             coletas_estado['Média por PCL'] = coletas_estado['Média por PCL'].fillna(0).round(1)
@@ -2389,7 +2662,8 @@ def _analise_coletas_fragment():
             st.markdown("---")
 
             # Top PCLs por coletas
-            create_section_header("🏆", "Top 20 PCLs por Volume de Coletas")
+            create_section_header("🏆", "Top 20 PCLs por Volume de Coletas",
+                                  help="Ranking dos 20 PCLs com maior volume de coletas acumuladas")
 
             cols_display = ['razao_social', 'representante', 'cidade', 'uf', 'acumulado_coletas', 'status']
             cols_available = [c for c in cols_display if c in df_labs_coletas.columns]
@@ -2416,10 +2690,11 @@ def _analise_coletas_fragment():
 @st.fragment
 def _listagem_pcls_fragment():
     """Conteúdo da aba PCLs. Fragment para manter a aba ativa ao mudar filtros."""
-    create_section_header("🏥", "Listagem de PCLs", "Base completa de laboratórios credenciados")
+    create_section_header("🏥", "Listagem de PCLs", "Base completa de laboratórios credenciados",
+                          help="Tabela com todos os PCLs credenciados. Use filtros e o seletor de colunas adicionais para personalizar a visualizacao")
 
-    # Filtros dentro da aba (usando listas cacheadas)
-    col_filtro1, col_filtro2, col_filtro3, col_filtro4 = st.columns([1, 1, 1, 1])
+    # Filtros de Estado e Cidade
+    col_filtro1, col_filtro2, col_filtro3 = st.columns([1, 1, 1])
 
     with col_filtro1:
         estados_pcl_lista = ['Todos'] + listas_filtros['pcl']['estados']
@@ -2433,24 +2708,21 @@ def _listagem_pcls_fragment():
         cidade_pcl_selecionada = st.selectbox("Cidade", cidades_pcl_lista, key="filtro_cidade_pcl")
 
     with col_filtro3:
-        # Filtrar bairros baseado na cidade/estado selecionado
-        df_temp_pcl = df_labs.copy()
-        if estado_pcl_selecionado != "Todos":
-            df_temp_pcl = df_temp_pcl[df_temp_pcl['uf'] == estado_pcl_selecionado]
-        if cidade_pcl_selecionada != "Todas":
-            df_temp_pcl = df_temp_pcl[df_temp_pcl['cidade'] == cidade_pcl_selecionada]
-        bairros_pcl_lista = ['Todos'] + sorted(df_temp_pcl['bairro'].dropna().unique().tolist()) if 'bairro' in df_temp_pcl.columns else ['Todos']
-        bairros_pcl_lista = [b for b in bairros_pcl_lista if b and str(b).strip()]  # Remover vazios
-        bairro_pcl_selecionado = st.selectbox("Bairro", bairros_pcl_lista, key="filtro_bairro_pcl")
-
-    with col_filtro4:
         st.markdown("<br>", unsafe_allow_html=True)
-        st.button("Limpar Filtros", key="limpar_pcls", on_click=_limpar_filtro_pcls)
+        st.button("Limpar Filtros", key="limpar_estado_cidade_pcl", on_click=_limpar_filtro_pcls)
 
-    # Aplicar filtros
-    df_labs_filtered = apply_filters(df_labs, estado_pcl_selecionado, cidade_pcl_selecionada)
-    if bairro_pcl_selecionado != "Todos" and 'bairro' in df_labs_filtered.columns:
-        df_labs_filtered = df_labs_filtered[df_labs_filtered['bairro'] == bairro_pcl_selecionado]
+    # Filtro de Período (novo estilo)
+    periodo_inicio_pcl, periodo_fim_pcl = render_period_filter("pcls")
+
+    # Aplicar filtros (estado + cidade + período)
+    df_labs_filtered = apply_filters(
+        df_labs,
+        estado_pcl_selecionado,
+        cidade_pcl_selecionada,
+        periodo_inicio_pcl,
+        periodo_fim_pcl,
+        'data_ultima_coleta'
+    )
 
     if df_labs_filtered.empty:
         st.warning("Nenhum PCL encontrado com os filtros selecionados.")
@@ -2462,14 +2734,18 @@ def _listagem_pcls_fragment():
         ativos = len(df_labs_filtered[df_labs_filtered['status'] == 'Ativo']) if 'status' in df_labs_filtered.columns else 0
 
         with col1:
-            create_metric_card("Total Filtrado", format_number(total), "", "", "gray")
+            create_metric_card("Total Filtrado", format_number(total), "", "", "gray",
+                               help="Quantidade de PCLs conforme os filtros aplicados")
         with col2:
-            create_metric_card("Ativos", format_number(ativos), f"{(ativos/total*100):.1f}%" if total > 0 else "0%", "", "gray")
+            create_metric_card("Ativos", format_number(ativos), f"{(ativos/total*100):.1f}%" if total > 0 else "0%", "", "gray",
+                               help="PCLs com coleta nos ultimos 90 dias")
         with col3:
-            create_metric_card("Inativos", format_number(total - ativos), "", "", "gray")
+            create_metric_card("Inativos", format_number(total - ativos), "", "", "gray",
+                               help="PCLs sem coleta nos ultimos 90 dias")
         with col4:
             coletas = df_labs_filtered['acumulado_coletas'].sum() if 'acumulado_coletas' in df_labs_filtered.columns else 0
-            create_metric_card("Total Coletas", format_number(int(coletas)), "", "", "gray")
+            create_metric_card("Total Coletas", format_number(int(coletas)), "", "", "gray",
+                               help="Soma das coletas acumuladas dos PCLs filtrados")
 
         st.markdown("---")
 
@@ -2620,10 +2896,11 @@ def _listagem_pcls_fragment():
 @st.fragment
 def _listagem_empresas_fragment():
     """Conteúdo da aba Empresas. Fragment para manter a aba ativa ao mudar filtros."""
-    create_section_header("🏢", "Listagem de Empresas", "Base completa de empresas credenciadas")
+    create_section_header("🏢", "Listagem de Empresas", "Base completa de empresas credenciadas",
+                          help="Tabela com todas as empresas credenciadas. Use filtros para personalizar a visualizacao")
 
-    # Filtros dentro da aba
-    col_filtro1, col_filtro2, col_filtro3, col_filtro4 = st.columns([1, 1, 1, 1])
+    # Filtros de Estado e Cidade
+    col_filtro1, col_filtro2, col_filtro3 = st.columns([1, 1, 1])
 
     with col_filtro1:
         estados_emp_lista = ['Todos'] + listas_filtros['empresa']['estados']
@@ -2637,24 +2914,22 @@ def _listagem_empresas_fragment():
         cidade_emp_selecionada = st.selectbox("Cidade", cidades_emp_lista, key="filtro_cidade_emp")
 
     with col_filtro3:
-        # Filtrar bairros baseado na cidade/estado selecionado
-        df_temp = df_empresas.copy()
-        if estado_emp_selecionado != "Todos":
-            df_temp = df_temp[df_temp['uf'] == estado_emp_selecionado]
-        if cidade_emp_selecionada != "Todas":
-            df_temp = df_temp[df_temp['cidade'] == cidade_emp_selecionada]
-        bairros_lista = ['Todos'] + sorted(df_temp['bairro'].dropna().unique().tolist()) if 'bairro' in df_temp.columns else ['Todos']
-        bairros_lista = [b for b in bairros_lista if b and b.strip()]  # Remover vazios
-        bairro_emp_selecionado = st.selectbox("Bairro", bairros_lista, key="filtro_bairro_emp")
-
-    with col_filtro4:
         st.markdown("<br>", unsafe_allow_html=True)
-        st.button("Limpar Filtros", key="limpar_empresas", on_click=_limpar_filtro_empresas)
+        st.button("Limpar Filtros", key="limpar_estado_cidade_emp", on_click=_limpar_filtro_empresas)
 
-    # Aplicar filtros
-    df_empresas_filtered = apply_filters(df_empresas, estado_emp_selecionado, cidade_emp_selecionada)
-    if bairro_emp_selecionado != "Todos" and 'bairro' in df_empresas_filtered.columns:
-        df_empresas_filtered = df_empresas_filtered[df_empresas_filtered['bairro'] == bairro_emp_selecionado]
+    # Filtro de Período (novo estilo)
+    periodo_inicio_emp, periodo_fim_emp = render_period_filter("emp")
+
+    # Aplicar filtros (estado + cidade + período)
+    # IMPORTANTE: Usar 'ultima_coleta' para empresas (não 'data_ultima_coleta')
+    df_empresas_filtered = apply_filters(
+        df_empresas,
+        estado_emp_selecionado,
+        cidade_emp_selecionada,
+        periodo_inicio_emp,
+        periodo_fim_emp,
+        'ultima_coleta'
+    )
 
     if df_empresas_filtered.empty:
         st.warning("Nenhuma empresa encontrada com os filtros selecionados.")
@@ -2666,17 +2941,21 @@ def _listagem_empresas_fragment():
         ativas = len(df_empresas_filtered[df_empresas_filtered['status'] == 'Ativo']) if 'status' in df_empresas_filtered.columns else 0
 
         with col1:
-            create_metric_card("Total Filtrado", format_number(total), "", "", "gray")
+            create_metric_card("Total Filtrado", format_number(total), "", "", "gray",
+                               help="Quantidade de empresas conforme os filtros aplicados")
         with col2:
-            create_metric_card("Ativas", format_number(ativas), f"{(ativas/total*100):.1f}%" if total > 0 else "0%", "", "gray")
+            create_metric_card("Ativas", format_number(ativas), f"{(ativas/total*100):.1f}%" if total > 0 else "0%", "", "gray",
+                               help="Empresas com uso de voucher nos ultimos 365 dias")
         with col3:
-            create_metric_card("Inativas", format_number(total - ativas), "", "", "gray")
+            create_metric_card("Inativas", format_number(total - ativas), "", "", "gray",
+                               help="Empresas sem uso de voucher nos ultimos 365 dias")
         with col4:
             if 'acumulado_vouchers' in df_empresas_filtered.columns:
                 vouchers = float(df_empresas_filtered['acumulado_vouchers'].fillna(0).sum())
             else:
                 vouchers = 0
-            create_metric_card("Total Vouchers", format_number(int(vouchers)), "", "", "gray")
+            create_metric_card("Total Vouchers", format_number(int(vouchers)), "", "", "gray",
+                               help="Soma dos vouchers acumulados das empresas filtradas")
 
         st.markdown("---")
 
@@ -2760,7 +3039,8 @@ def _listagem_empresas_fragment():
 @st.fragment
 def _analises_especificas_fragment():
     """Conteúdo da aba Análises Específicas. Fragment para manter a aba ativa ao mudar filtros."""
-    create_section_header("🔍", "Análises Específicas", "Consultas customizadas conforme demanda")
+    create_section_header("🔍", "Análises Específicas", "Consultas customizadas conforme demanda",
+                          help="Selecione uma analise no menu para visualizar resultados detalhados com tabela e download")
 
     # Cache: Normalizar cidades uma única vez
     df_labs_norm, df_empresas_norm = get_normalized_city_data(df_labs, df_empresas)
@@ -2799,18 +3079,25 @@ def _analises_especificas_fragment():
             if not df_result.empty:
                 st.success(f"✅ Encontrados {len(df_result)} PCLs em cidades sem empresas credenciadas")
 
-                cols = ['cnpj', 'razao_social', 'nome_fantasia', 'cidade', 'uf', 'transportadora', 'frequencia', 'status', 'acumulado_coletas', 'data_ultima_coleta']
+                cols = ['cnpj', 'razao_social', 'nome_fantasia', 'data_credenciamento',
+                        'status_voucher', 'valor_total_coleta',
+                        'acumulado_coletas', 'acumulado_coletas_ano', 'data_ultima_coleta',
+                        'status', 'representante',
+                        'cidade', 'uf', 'transportadora', 'frequencia']
                 cols_available = [c for c in cols if c in df_result.columns]
 
-                # Fallback: usar todas as colunas se nenhuma das esperadas existir
                 if not cols_available:
                     cols_available = df_result.columns.tolist()
 
                 df_display = df_result[cols_available].copy()
 
                 rename_map = {'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'nome_fantasia': 'Nome Fantasia',
-                              'cidade': 'Cidade', 'uf': 'UF', 'transportadora': 'Transportadora', 'frequencia': 'Frequência',
-                              'status': 'Status', 'acumulado_coletas': 'Coletas', 'data_ultima_coleta': 'Última Coleta'}
+                              'data_credenciamento': 'Data Credenciamento',
+                              'status_voucher': 'Aceita Voucher', 'valor_total_coleta': 'Valor Exame',
+                              'acumulado_coletas': 'Coletas Total', 'acumulado_coletas_ano': 'Coletas Ano',
+                              'data_ultima_coleta': 'Última Coleta',
+                              'status': 'Ativo/Inativo', 'representante': 'Representante',
+                              'cidade': 'Cidade', 'uf': 'UF', 'transportadora': 'Transportadora', 'frequencia': 'Frequência'}
                 df_display = df_display.rename(columns=rename_map)
 
                 st.dataframe(df_display, use_container_width=True, hide_index=True, height=500)
@@ -2854,26 +3141,31 @@ def _analises_especificas_fragment():
                 if not df_result.empty:
                     st.warning(f"⚠️ Encontrados {len(df_result)} PCLs em cidades onde todas as empresas estão inativas")
 
-                    cols = ['cnpj', 'razao_social', 'nome_fantasia', 'cidade', 'uf', 'transportadora', 'frequencia', 'status', 'acumulado_coletas', 'data_ultima_coleta']
+                    cols = ['cnpj', 'razao_social', 'nome_fantasia', 'data_credenciamento',
+                            'status_voucher', 'valor_total_coleta',
+                            'acumulado_coletas', 'acumulado_coletas_ano', 'data_ultima_coleta',
+                            'status', 'representante',
+                            'cidade', 'uf', 'transportadora', 'frequencia']
                     cols_available = [c for c in cols if c in df_result.columns]
 
-                    # Fallback: usar todas as colunas se nenhuma das esperadas existir
                     if not cols_available:
                         cols_available = df_result.columns.tolist()
 
                     df_display = df_result[cols_available].copy()
 
                     # Adicionar quantidade de empresas inativas na cidade
-                    # Criar mapeamento de cidade normalizada para original
                     cidade_map_norm_to_orig = dict(zip(df_empresas_norm['cidade'], df_empresas['cidade']))
-                    # Mapear cidades normalizadas de volta para originais
                     cidades_originais = {cidade_map_norm_to_orig.get(c, c) for c in cidades_empresas_inativas if c in cidade_map_norm_to_orig}
                     emp_count = df_empresas[df_empresas['cidade'].isin(cidades_originais)].groupby('cidade').size().to_dict()
                     df_display['empresas_inativas_cidade'] = df_display['cidade'].map(emp_count).fillna(0).astype(int)
 
                     rename_map = {'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'nome_fantasia': 'Nome Fantasia',
+                                  'data_credenciamento': 'Data Credenciamento',
+                                  'status_voucher': 'Aceita Voucher', 'valor_total_coleta': 'Valor Exame',
+                                  'acumulado_coletas': 'Coletas Total', 'acumulado_coletas_ano': 'Coletas Ano',
+                                  'data_ultima_coleta': 'Última Coleta',
+                                  'status': 'Ativo/Inativo', 'representante': 'Representante',
                                   'cidade': 'Cidade', 'uf': 'UF', 'transportadora': 'Transportadora', 'frequencia': 'Frequência',
-                                  'status': 'Status PCL', 'acumulado_coletas': 'Coletas', 'data_ultima_coleta': 'Última Coleta',
                                   'empresas_inativas_cidade': 'Empresas Inativas na Cidade'}
                     df_display = df_display.rename(columns=rename_map)
 
@@ -2910,18 +3202,24 @@ def _analises_especificas_fragment():
             if not df_result.empty:
                 st.error(f"❌ Encontradas {len(df_result)} empresas em cidades sem PCL credenciado")
 
-                cols = ['cnpj', 'razao_social', 'nome_fantasia', 'cidade', 'uf', 'status', 'acumulado_vouchers', 'data_ultima_utilizacao']
+                cols = ['cnpj', 'razao_social', 'nome_fantasia', 'data_credenciamento',
+                        'acumulado_vouchers', 'coletas_2025',
+                        'ultima_coleta', 'ultima_coleta_voucher',
+                        'status', 'representante',
+                        'cidade', 'uf']
                 cols_available = [c for c in cols if c in df_result.columns]
 
-                # Fallback: usar todas as colunas se nenhuma das esperadas existir
                 if not cols_available:
                     cols_available = df_result.columns.tolist()
 
                 df_display = df_result[cols_available].copy()
 
                 rename_map = {'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'nome_fantasia': 'Nome Fantasia',
-                              'cidade': 'Cidade', 'uf': 'UF', 'status': 'Status',
-                              'acumulado_vouchers': 'Vouchers', 'data_ultima_utilizacao': 'Última Utilização'}
+                              'data_credenciamento': 'Data Credenciamento',
+                              'acumulado_vouchers': 'Vouchers Total', 'coletas_2025': 'Vouchers Ano',
+                              'ultima_coleta': 'Última Utilização', 'ultima_coleta_voucher': 'Último Voucher',
+                              'status': 'Ativo/Inativo', 'representante': 'Representante',
+                              'cidade': 'Cidade', 'uf': 'UF'}
                 df_display = df_display.rename(columns=rename_map)
 
                 st.dataframe(df_display, use_container_width=True, hide_index=True, height=500)
@@ -2964,26 +3262,30 @@ def _analises_especificas_fragment():
                 if not df_result.empty:
                     st.warning(f"⚠️ Encontradas {len(df_result)} empresas em cidades onde todos os PCLs estão inativos")
 
-                    cols = ['cnpj', 'razao_social', 'nome_fantasia', 'cidade', 'uf', 'status', 'acumulado_vouchers', 'data_ultima_utilizacao']
+                    cols = ['cnpj', 'razao_social', 'nome_fantasia', 'data_credenciamento',
+                            'acumulado_vouchers', 'coletas_2025',
+                            'ultima_coleta', 'ultima_coleta_voucher',
+                            'status', 'representante',
+                            'cidade', 'uf']
                     cols_available = [c for c in cols if c in df_result.columns]
 
-                    # Fallback: usar todas as colunas se nenhuma das esperadas existir
                     if not cols_available:
                         cols_available = df_result.columns.tolist()
 
                     df_display = df_result[cols_available].copy()
 
                     # Adicionar quantidade de PCLs inativos na cidade
-                    # Criar mapeamento de cidade normalizada para original
                     cidade_map_norm_to_orig = dict(zip(df_labs_norm['cidade'], df_labs['cidade']))
-                    # Mapear cidades normalizadas de volta para originais
                     cidades_originais = {cidade_map_norm_to_orig.get(c, c) for c in cidades_pcls_inativos if c in cidade_map_norm_to_orig}
                     pcl_count = df_labs[df_labs['cidade'].isin(cidades_originais)].groupby('cidade').size().to_dict()
                     df_display['pcls_inativos_cidade'] = df_display['cidade'].map(pcl_count).fillna(0).astype(int)
 
                     rename_map = {'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'nome_fantasia': 'Nome Fantasia',
-                                  'cidade': 'Cidade', 'uf': 'UF', 'status': 'Status Empresa',
-                                  'acumulado_vouchers': 'Vouchers', 'data_ultima_utilizacao': 'Última Utilização',
+                                  'data_credenciamento': 'Data Credenciamento',
+                                  'acumulado_vouchers': 'Vouchers Total', 'coletas_2025': 'Vouchers Ano',
+                                  'ultima_coleta': 'Última Utilização', 'ultima_coleta_voucher': 'Último Voucher',
+                                  'status': 'Ativo/Inativo', 'representante': 'Representante',
+                                  'cidade': 'Cidade', 'uf': 'UF',
                                   'pcls_inativos_cidade': 'PCLs Inativos na Cidade'}
                     df_display = df_display.rename(columns=rename_map)
 
@@ -3355,13 +3657,75 @@ def _analises_especificas_fragment():
             st.warning("Dados de finalidade nao disponiveis no arquivo atual.")
         else:
             # Totais gerais
+            tooltips_finalidade = {
+                'finalidade_cnh': 'Total de coletas para habilitacao (CNH). (Adicionado 09/02/2026)',
+                'finalidade_clt': 'Total de coletas para exames trabalhistas (CLT). (Adicionado 09/02/2026)',
+                'finalidade_outro': 'Total de coletas para outras finalidades. (Adicionado 09/02/2026)',
+                'finalidade_concurso_publico': 'Total de coletas para concursos publicos. (Adicionado 09/02/2026)',
+            }
             col_metricas = st.columns(len(existentes))
             for i, (col_name, label) in enumerate(existentes.items()):
                 with col_metricas[i]:
                     val = int(df_labs[col_name].sum())
-                    create_metric_card(f"Total {label}", format_number(val), "", "", "gray")
+                    create_metric_card(f"Total {label}", format_number(val), "", "", "gray",
+                                       help=tooltips_finalidade.get(col_name))
 
             st.markdown("---")
+
+            # Detalhamento CNH (Novo - ADD-XXX)
+            cols_cnh_detalhe = {
+                'cnh_primeira_habilitacao': 'Primeira Habilitação',
+                'cnh_renovacao': 'Renovação',
+                'cnh_mudanca_categoria': 'Mudança de Categoria'
+            }
+            existentes_cnh = {k: v for k, v in cols_cnh_detalhe.items() if k in df_labs.columns}
+            
+            # Detalhamento CLT (Novo - ADD-XXX)
+            cols_clt_detalhe = {
+                'clt_admissional': 'Admissional',
+                'clt_demissional': 'Demissional',
+                'clt_periodico': 'Periódico',
+                'clt_mudanca_funcao': 'Mudança de Função',
+                'clt_retorno_trabalho': 'Retorno ao Trabalho'
+            }
+            existentes_clt = {k: v for k, v in cols_clt_detalhe.items() if k in df_labs.columns}
+
+            if existentes_cnh or existentes_clt:
+                col_det1, col_det2 = st.columns(2)
+                
+                with col_det1:
+                    if existentes_cnh:
+                        cnh_vals = []
+                        for col, label in existentes_cnh.items():
+                            val = df_labs[col].sum()
+                            if val > 0:
+                                cnh_vals.append({'Tipo': label, 'Coletas': val})
+                        
+                        if cnh_vals:
+                            df_cnh_chart = pd.DataFrame(cnh_vals)
+                            fig_cnh = px.pie(df_cnh_chart, values='Coletas', names='Tipo', title='Detalhamento CNH', hole=0.4)
+                            fig_cnh.update_layout(height=300, margin=dict(t=30, b=0, l=0, r=0))
+                            st.plotly_chart(fig_cnh, use_container_width=True)
+                        else:
+                            st.info("Sem dados detalhados para CNH.")
+                
+                with col_det2:
+                    if existentes_clt:
+                        clt_vals = []
+                        for col, label in existentes_clt.items():
+                            val = df_labs[col].sum()
+                            if val > 0:
+                                clt_vals.append({'Tipo': label, 'Coletas': val})
+                        
+                        if clt_vals:
+                            df_clt_chart = pd.DataFrame(clt_vals)
+                            fig_clt = px.bar(df_clt_chart, x='Coletas', y='Tipo', orientation='h', title='Detalhamento CLT', text='Coletas')
+                            fig_clt.update_layout(height=300, margin=dict(t=30, b=0, l=0, r=0), yaxis={'categoryorder': 'total ascending'})
+                            st.plotly_chart(fig_clt, use_container_width=True)
+                        else:
+                            st.info("Sem dados detalhados para CLT.")
+                
+                st.markdown("---")
 
             # Tabela por UF
             if 'uf' in df_labs.columns:
@@ -3392,7 +3756,8 @@ def _analises_especificas_fragment():
 @st.fragment
 def _qualidade_dados_fragment():
     """ADD-961: Conteúdo da aba Qualidade de Dados. Fragment para manter a aba ativa ao mudar filtros."""
-    create_section_header("🛡️", "Qualidade de Dados", "Identificação e consolidação de ofensores de cadastro")
+    create_section_header("🛡️", "Qualidade de Dados", "Identificação e consolidação de ofensores de cadastro",
+                          help="Identifica problemas de cadastro em PCLs e empresas por severidade (Critico, Alto, Medio, Baixo)")
 
     # Consolidar ofensores
     df_ofensores = consolidar_ofensores(df_labs, df_empresas)
@@ -3414,19 +3779,24 @@ def _qualidade_dados_fragment():
             score_color = "orange"
         else:
             score_color = "red"
-        st.metric("Score de Qualidade", f"{score}%", delta=None)
+        st.metric("Score de Qualidade", f"{score}%", delta=None,
+                  help="Percentual de registros sem problemas de cadastro. Quanto maior, melhor a qualidade dos dados")
 
     with col2:
-        st.metric("🔴 Críticos", format_number(metricas['criticos']))
+        st.metric("🔴 Críticos", format_number(metricas['criticos']),
+                  help="Problemas graves que impedem o funcionamento correto (CNPJ invalido, razao social vazia, cidade vazia, UF invalida)")
 
     with col3:
-        st.metric("🟠 Altos", format_number(metricas['altos']))
+        st.metric("🟠 Altos", format_number(metricas['altos']),
+                  help="Problemas importantes que afetam a qualidade dos dados (endereco vazio, CEP invalido, valor coleta zerado)")
 
     with col4:
-        st.metric("🟡 Médios", format_number(metricas['medios']))
+        st.metric("🟡 Médios", format_number(metricas['medios']),
+                  help="Problemas moderados que merecem atencao (representante vazio, transportadora nao cadastrada, e-mail/telefone vazio)")
 
     with col5:
-        st.metric("🟢 Baixos", format_number(metricas['baixos']))
+        st.metric("🟢 Baixos", format_number(metricas['baixos']),
+                  help="Problemas menores com baixo impacto (nome fantasia vazio)")
 
     st.markdown("---")
 
@@ -3434,18 +3804,22 @@ def _qualidade_dados_fragment():
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
-        st.metric("Total de Problemas", format_number(metricas['total_ofensores']))
+        st.metric("Total de Problemas", format_number(metricas['total_ofensores']),
+                  help="Soma de todos os problemas identificados em PCLs e empresas")
 
     with col2:
-        st.metric("PCLs com Problema", format_number(metricas['pcls_com_problema']))
+        st.metric("PCLs com Problema", format_number(metricas['pcls_com_problema']),
+                  help="Quantidade de PCLs que possuem pelo menos um problema de cadastro")
 
     with col3:
-        st.metric("Empresas com Problema", format_number(metricas['empresas_com_problema']))
+        st.metric("Empresas com Problema", format_number(metricas['empresas_com_problema']),
+                  help="Quantidade de empresas que possuem pelo menos um problema de cadastro")
 
     with col4:
         total_registros = total_pcls + total_empresas
         registros_ok = total_registros - metricas['pcls_com_problema'] - metricas['empresas_com_problema']
-        st.metric("Registros OK", format_number(registros_ok))
+        st.metric("Registros OK", format_number(registros_ok),
+                  help="Registros (PCLs + empresas) sem nenhum problema de cadastro identificado")
 
     st.markdown("---")
 
@@ -3525,10 +3899,10 @@ def _qualidade_dados_fragment():
                     y='tipo_problema',
                     color='severidade',
                     orientation='h',
-                    title='Top 15 Tipos de Problemas',
                     color_discrete_map={'Crítico': '#EF4444', 'Alto': '#F97316', 'Médio': '#EAB308', 'Baixo': '#22C55E'}
                 )
-                fig.update_layout(yaxis={'categoryorder': 'total ascending'}, height=500)
+                fig.update_layout(yaxis={'categoryorder': 'total ascending'}, height=500, margin=dict(t=20))
+                chart_title_with_tooltip("Top 15 Tipos de Problemas", "Tipos de problemas mais frequentes, agrupados por severidade")
                 st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("Nenhum dado para exibir.")
@@ -3547,11 +3921,11 @@ def _qualidade_dados_fragment():
                     x='quantidade',
                     y='representante',
                     orientation='h',
-                    title='Top 15 Representantes com Mais Problemas',
                     color='quantidade',
                     color_continuous_scale='Reds'
                 )
-                fig.update_layout(yaxis={'categoryorder': 'total ascending'}, height=500, showlegend=False)
+                fig.update_layout(yaxis={'categoryorder': 'total ascending'}, height=500, showlegend=False, margin=dict(t=20))
+                chart_title_with_tooltip("Top 15 Representantes com Mais Problemas", "Representantes com maior quantidade de problemas de cadastro nos registros sob sua responsabilidade")
                 st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("Nenhum problema associado a representantes.")
@@ -3633,31 +4007,45 @@ tab_visao_geral, tab_visao_estado, tab_analise_coletas, tab_listagem_pcls, tab_l
 ])
 
 with tab_visao_geral:
-    create_section_header("📈", "Visão Geral", "Métricas e indicadores principais da base CTOX")
-    
+    create_section_header("📈", "Visão Geral", "Métricas e indicadores principais da base CTOX",
+                          help="Painel principal com resumo de PCLs, empresas, coletas e vouchers")
+
+    # Filtro de período
+    data_inicio, data_fim = render_period_filter("vg", on_clear=_limpar_filtro_visao_geral, clear_key="limpar_filtro_vg")
+
+    st.markdown("---")
+
+    # Aplicar filtro aos dataframes
+    if data_inicio is not None:
+        df_labs_filtered = apply_filters(df_labs, "Todos", "Todas", data_inicio, data_fim, 'data_ultima_coleta')
+        df_empresas_filtered = apply_filters(df_empresas, "Todos", "Todas", data_inicio, data_fim, 'ultima_coleta')
+    else:
+        df_labs_filtered = df_labs
+        df_empresas_filtered = df_empresas
+
     # Calcular métricas
-    total_pcls = len(df_labs) if not df_labs.empty else 0
-    pcls_ativos = len(df_labs[df_labs['status'] == 'Ativo']) if not df_labs.empty else 0
+    total_pcls = len(df_labs_filtered) if not df_labs_filtered.empty else 0
+    pcls_ativos = len(df_labs_filtered[df_labs_filtered['status'] == 'Ativo']) if not df_labs_filtered.empty else 0
     pcls_inativos = total_pcls - pcls_ativos
     pct_pcls_ativos = (pcls_ativos / total_pcls * 100) if total_pcls > 0 else 0
-    
-    total_empresas = len(df_empresas) if not df_empresas.empty else 0
-    empresas_ativas = len(df_empresas[df_empresas['status'] == 'Ativo']) if not df_empresas.empty else 0
+
+    total_empresas = len(df_empresas_filtered) if not df_empresas_filtered.empty else 0
+    empresas_ativas = len(df_empresas_filtered[df_empresas_filtered['status'] == 'Ativo']) if not df_empresas_filtered.empty else 0
     empresas_inativas = total_empresas - empresas_ativas
     pct_empresas_ativas = (empresas_ativas / total_empresas * 100) if total_empresas > 0 else 0
-    
+
     total_coletas = 0
-    if not df_labs.empty and 'acumulado_coletas' in df_labs.columns:
+    if not df_labs_filtered.empty and 'acumulado_coletas' in df_labs_filtered.columns:
         try:
-            coletas_sum = df_labs['acumulado_coletas'].sum()
+            coletas_sum = df_labs_filtered['acumulado_coletas'].sum()
             total_coletas = float(coletas_sum) if pd.notna(coletas_sum) and np.isfinite(coletas_sum) else 0
         except:
             total_coletas = 0
-    
+
     total_vouchers = 0
-    if not df_empresas.empty and 'acumulado_vouchers' in df_empresas.columns:
+    if not df_empresas_filtered.empty and 'acumulado_vouchers' in df_empresas_filtered.columns:
         try:
-            vouchers_sum = df_empresas['acumulado_vouchers'].sum()
+            vouchers_sum = df_empresas_filtered['acumulado_vouchers'].sum()
             total_vouchers = float(vouchers_sum) if pd.notna(vouchers_sum) and np.isfinite(vouchers_sum) else 0
         except:
             total_vouchers = 0
@@ -3666,13 +4054,17 @@ with tab_visao_geral:
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        create_metric_card("Total PCLs", format_number(total_pcls), f"{pct_pcls_ativos:.1f}% ativos", f"↗ {format_number(pcls_ativos)} ativos", "green")
+        create_metric_card("Total PCLs", format_number(total_pcls), f"{pct_pcls_ativos:.1f}% ativos", f"↗ {format_number(pcls_ativos)} ativos", "green",
+                           help="Quantidade total de PCLs credenciados (exclui descredenciados)")
     with col2:
-        create_metric_card("PCLs Inativos", format_number(pcls_inativos), "Sem coleta há +90 dias", "", "gray")
+        create_metric_card("PCLs Inativos", format_number(pcls_inativos), "Sem coleta há +90 dias", "", "gray",
+                           help="PCLs sem nenhuma coleta nos ultimos 90 dias")
     with col3:
-        create_metric_card("Total Empresas", format_number(total_empresas), f"{pct_empresas_ativas:.1f}% ativas", f"↗ {format_number(empresas_ativas)} ativas", "green")
+        create_metric_card("Total Empresas", format_number(total_empresas), f"{pct_empresas_ativas:.1f}% ativas", f"↗ {format_number(empresas_ativas)} ativas", "green",
+                           help="Quantidade total de empresas credenciadas no sistema")
     with col4:
-        create_metric_card("Empresas Inativas", format_number(empresas_inativas), "Sem uso há +365 dias", "", "gray")
+        create_metric_card("Empresas Inativas", format_number(empresas_inativas), "Sem uso há +365 dias", "", "gray",
+                           help="Empresas sem uso de voucher nos ultimos 365 dias")
 
     # Expander com PCLs Descredenciados
     df_descredenciados = st.session_state.get('pcls_descredenciados', pd.DataFrame())
@@ -3734,22 +4126,27 @@ with tab_visao_geral:
     
     with col1:
         media_coletas = total_coletas / total_pcls if total_pcls > 0 else 0
-        create_metric_card("Total Coletas", format_number(int(total_coletas)), f"Média: {int(media_coletas)}/PCL", "", "gray")
+        create_metric_card("Total Coletas", format_number(int(total_coletas)), f"Média: {int(media_coletas)}/PCL", "", "gray",
+                           help="Soma de todas as coletas realizadas (acumulado historico)")
     with col2:
         media_vouchers = total_vouchers / total_empresas if total_empresas > 0 else 0
-        create_metric_card("Total Vouchers", format_number(int(total_vouchers)), f"Média: {int(media_vouchers)}/Empresa", "", "gray")
+        create_metric_card("Total Vouchers", format_number(int(total_vouchers)), f"Média: {int(media_vouchers)}/Empresa", "", "gray",
+                           help="Soma de todos os vouchers utilizados (acumulado historico)")
     with col3:
-        estados_pcl = df_labs['uf'].nunique() if not df_labs.empty and 'uf' in df_labs.columns else 0
-        cidades_pcl = df_labs['cidade'].nunique() if not df_labs.empty and 'cidade' in df_labs.columns else 0
-        create_metric_card("Cobertura", f"{estados_pcl} UFs", f"{format_number(cidades_pcl)} cidades", "", "gray")
+        estados_pcl = df_labs_filtered['uf'].nunique() if not df_labs_filtered.empty and 'uf' in df_labs_filtered.columns else 0
+        cidades_pcl = df_labs_filtered['cidade'].nunique() if not df_labs_filtered.empty and 'cidade' in df_labs_filtered.columns else 0
+        create_metric_card("Cobertura", f"{estados_pcl} UFs", f"{format_number(cidades_pcl)} cidades", "", "gray",
+                           help="Quantidade de estados e cidades com pelo menos um PCL credenciado")
     with col4:
         media_coletas_por_pcl = total_coletas / total_pcls if total_pcls > 0 else 0
-        create_metric_card("Média de Coletas", format_number(int(media_coletas_por_pcl)), "Coletas por PCL", "", "gray")
+        create_metric_card("Média de Coletas", format_number(int(media_coletas_por_pcl)), "Coletas por PCL", "", "gray",
+                           help="Total de coletas dividido pelo total de PCLs")
     
     st.markdown("---")
     
     # Cards de Status e Top UFs
-    create_section_header("🎯", "Status e Distribuição")
+    create_section_header("🎯", "Status e Distribuição",
+                          help="Percentuais de atividade e ranking dos estados com mais PCLs e empresas")
     
     col1, col2, col3, col4 = st.columns(4)
     
@@ -3757,116 +4154,110 @@ with tab_visao_geral:
         try:
             pcls_ativos_val = int(pcls_ativos) if pd.notna(pcls_ativos) else 0
             total_pcls_val = int(total_pcls) if pd.notna(total_pcls) else 1
-            create_progress_card("PCLs Ativos", pcls_ativos_val, total_pcls_val, "#22C55E")
+            create_progress_card("PCLs Ativos", pcls_ativos_val, total_pcls_val, "#22C55E",
+                                 help="PCLs com coleta nos ultimos 90 dias")
         except:
             create_progress_card("PCLs Ativos", 0, 1, "#22C55E")
-    
+
     with col2:
         try:
             empresas_ativas_val = int(empresas_ativas) if pd.notna(empresas_ativas) else 0
             total_empresas_val = int(total_empresas) if pd.notna(total_empresas) else 1
-            create_progress_card("Empresas Ativas", empresas_ativas_val, total_empresas_val, "#3B82F6")
+            create_progress_card("Empresas Ativas", empresas_ativas_val, total_empresas_val, "#3B82F6",
+                                 help="Empresas com uso de voucher nos ultimos 365 dias")
         except:
             create_progress_card("Empresas Ativas", 0, 1, "#3B82F6")
     
     with col3:
-        if not df_labs.empty and 'uf' in df_labs.columns:
+        if not df_labs_filtered.empty and 'uf' in df_labs_filtered.columns:
             try:
-                top5_pcl = df_labs.groupby('uf').size().nlargest(5)
-                top5_pcl_dict = {str(k): int(v) for k, v in top5_pcl.to_dict().items() if pd.notna(v) and np.isfinite(v)}
+                # Filtrar UFs vazios antes do groupby
+                df_labs_uf = df_labs_filtered[df_labs_filtered['uf'].notna()]
+                df_labs_uf = df_labs_uf[df_labs_uf['uf'].astype(str).str.strip() != '']
+
+                top5_pcl = df_labs_uf.groupby('uf').size().nlargest(5)
+                top5_pcl_dict = {str(k): int(v) for k, v in top5_pcl.to_dict().items() if pd.notna(k) and pd.notna(v) and str(k).strip() != ''}
                 if top5_pcl_dict:
-                    create_top_list_card("Top 5 UFs (PCLs)", top5_pcl_dict, "#22C55E")
+                    create_top_list_card("Top 5 UFs (PCLs)", top5_pcl_dict, "#22C55E",
+                                         help="5 estados com maior quantidade de PCLs credenciados")
             except:
                 pass
-    
+
     with col4:
-        if not df_empresas.empty and 'uf' in df_empresas.columns:
+        if not df_empresas_filtered.empty and 'uf' in df_empresas_filtered.columns:
             try:
-                top5_emp = df_empresas.groupby('uf').size().nlargest(5)
-                top5_emp_dict = {str(k): int(v) for k, v in top5_emp.to_dict().items() if pd.notna(v) and np.isfinite(v)}
+                # Filtrar UFs vazios antes do groupby
+                df_emp_uf = df_empresas_filtered[df_empresas_filtered['uf'].notna()]
+                df_emp_uf = df_emp_uf[df_emp_uf['uf'].astype(str).str.strip() != '']
+
+                top5_emp = df_emp_uf.groupby('uf').size().nlargest(5)
+                top5_emp_dict = {str(k): int(v) for k, v in top5_emp.to_dict().items() if pd.notna(k) and pd.notna(v) and str(k).strip() != ''}
                 if top5_emp_dict:
-                    create_top_list_card("Top 5 UFs (Empresas)", top5_emp_dict, "#3B82F6")
+                    create_top_list_card("Top 5 UFs (Empresas)", top5_emp_dict, "#3B82F6",
+                                         help="5 estados com maior quantidade de empresas credenciadas")
             except:
                 pass
     
-    st.markdown("---")
-
-    # Perfil Comercial
-    create_section_header("💼", "Perfil Comercial", "Indicadores comerciais e financeiros")
-
-    col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
-        if not df_labs.empty and 'status_voucher' in df_labs.columns:
-            aceita_voucher = len(df_labs[df_labs['status_voucher'].astype(str).str.lower().isin(['sim', 'true', '1', 'ativo'])])
-            total_pcls_val = int(total_pcls) if pd.notna(total_pcls) else 1
-            create_progress_card("Aceita Voucher", aceita_voucher, total_pcls_val, "#22C55E")
-
-    with col2:
-        if not df_labs.empty and 'simples_nacional' in df_labs.columns:
-            simples = len(df_labs[df_labs['simples_nacional'].astype(str).str.lower().isin(['sim', 'true', '1'])])
-            total_pcls_val = int(total_pcls) if pd.notna(total_pcls) else 1
-            create_progress_card("Simples Nacional", simples, total_pcls_val, "#3B82F6")
-
-    with col3:
-        if not df_labs.empty and 'valor_total_coleta' in df_labs.columns:
-            media_valor = df_labs['valor_total_coleta'].mean()
-            create_metric_card("Valor Medio Coleta", format_currency(media_valor), "", "", "gray")
-
-    with col4:
-        if not df_labs.empty and 'volume_maximo_coletas_2025' in df_labs.columns:
-            cap_total = int(df_labs['volume_maximo_coletas_2025'].sum())
-            create_metric_card("Capacidade 2025", format_number(cap_total), "Volume maximo total", "", "gray")
-
-    # Gráfico de Finalidade das Coletas
-    if not df_labs.empty:
-        finalidade_cols = {
-            'finalidade_cnh': 'CNH', 'finalidade_clt': 'CLT',
-            'finalidade_outro': 'Outro', 'finalidade_concurso_publico': 'Concurso'
-        }
-        finalidade_existentes = {k: v for k, v in finalidade_cols.items() if k in df_labs.columns}
-        if finalidade_existentes:
-            totais = {v: int(df_labs[k].sum()) for k, v in finalidade_existentes.items()}
-            totais = {k: v for k, v in totais.items() if v > 0}
-            if totais:
-                col1, col2 = st.columns(2)
-                with col1:
-                    create_top_list_card("Finalidade das Coletas", totais, "#8B5CF6")
-
     st.markdown("---")
 
     # Gráficos por Estado
-    create_section_header("📊", "Distribuição por Estado", "Top 12 estados por volume")
+    create_section_header("📊", "Distribuição por Estado", "Top 12 estados por volume",
+                          help="Graficos de barras com quantidade de PCLs e empresas por estado")
 
     col1, col2 = st.columns(2)
 
     with col1:
-        if not df_labs.empty and 'uf' in df_labs.columns:
-            df_estado = df_labs.groupby('uf').size().reset_index(name='Quantidade')
+        if not df_labs_filtered.empty and 'uf' in df_labs_filtered.columns:
+            # Filtrar registros com UF vazio ou None
+            df_labs_uf = df_labs_filtered[df_labs_filtered['uf'].notna()]
+            df_labs_uf = df_labs_uf[df_labs_uf['uf'].astype(str).str.strip() != '']
+
+            df_estado = df_labs_uf.groupby('uf').size().reset_index(name='Quantidade')
             fig = create_bar_chart(df_estado, 'uf', 'Quantidade', "PCLs por Estado", max_items=12, color='#22C55E')
+            chart_title_with_tooltip("PCLs por Estado", "Distribuição dos PCLs credenciados por estado (UF), mostrando os 12 estados com maior quantidade")
+            fig.update_layout(title=None)
             st.plotly_chart(fig, use_container_width=True)
-    
+
     with col2:
-        if not df_empresas.empty and 'uf' in df_empresas.columns:
-            df_estado = df_empresas.groupby('uf').size().reset_index(name='Quantidade')
+        if not df_empresas_filtered.empty and 'uf' in df_empresas_filtered.columns:
+            # Filtrar registros com UF vazio ou None
+            df_emp_uf = df_empresas_filtered[df_empresas_filtered['uf'].notna()]
+            df_emp_uf = df_emp_uf[df_emp_uf['uf'].astype(str).str.strip() != '']
+
+            df_estado = df_emp_uf.groupby('uf').size().reset_index(name='Quantidade')
             fig = create_bar_chart(df_estado, 'uf', 'Quantidade', "Empresas por Estado", max_items=12, color='#3B82F6')
+            chart_title_with_tooltip("Empresas por Estado", "Distribuição das empresas credenciadas por estado (UF), mostrando os 12 estados com maior quantidade")
+            fig.update_layout(title=None)
             st.plotly_chart(fig, use_container_width=True)
     
     st.markdown("")
     
     # Ativos vs Inativos
-    create_section_header("📈", "Ativos vs Inativos por Estado", "Top 10 estados")
+    create_section_header("📈", "Ativos vs Inativos por Estado", "Top 10 estados",
+                          help="Comparacao visual entre ativos e inativos agrupados por estado")
     
     col1, col2 = st.columns(2)
     
     with col1:
-        if not df_labs.empty and 'uf' in df_labs.columns:
-            fig = create_grouped_bar_chart(df_labs, 'uf', "PCLs por Estado", max_items=10)
+        if not df_labs_filtered.empty and 'uf' in df_labs_filtered.columns:
+            # Filtrar registros com UF vazio ou None
+            df_labs_uf = df_labs_filtered[df_labs_filtered['uf'].notna()]
+            df_labs_uf = df_labs_uf[df_labs_uf['uf'].astype(str).str.strip() != '']
+
+            fig = create_grouped_bar_chart(df_labs_uf, 'uf', "PCLs por Estado", max_items=10)
+            chart_title_with_tooltip("PCLs Ativos vs Inativos por Estado", "Comparação entre PCLs ativos e inativos por estado, mostrando os 10 estados com maior volume total")
+            fig.update_layout(title=None)
             st.plotly_chart(fig, use_container_width=True)
 
     with col2:
-        if not df_empresas.empty and 'uf' in df_empresas.columns:
-            fig = create_grouped_bar_chart(df_empresas, 'uf', "Empresas por Estado", max_items=10, labels={'Ativo': 'Ativas', 'Inativo': 'Inativas'})
+        if not df_empresas_filtered.empty and 'uf' in df_empresas_filtered.columns:
+            # Filtrar registros com UF vazio ou None
+            df_emp_uf = df_empresas_filtered[df_empresas_filtered['uf'].notna()]
+            df_emp_uf = df_emp_uf[df_emp_uf['uf'].astype(str).str.strip() != '']
+
+            fig = create_grouped_bar_chart(df_emp_uf, 'uf', "Empresas por Estado", max_items=10, labels={'Ativo': 'Ativas', 'Inativo': 'Inativas'})
+            chart_title_with_tooltip("Empresas Ativas vs Inativas por Estado", "Comparação entre empresas ativas e inativas por estado, mostrando os 10 estados com maior volume total")
+            fig.update_layout(title=None)
             st.plotly_chart(fig, use_container_width=True)
 
 with tab_visao_estado:
@@ -3888,7 +4279,8 @@ with tab_qualidade:
     _qualidade_dados_fragment()
 
 with tab_ajuda:
-    create_section_header("❓", "Ajuda / FAQ", "Perguntas frequentes e orientações de uso")
+    create_section_header("❓", "Ajuda / FAQ", "Perguntas frequentes e orientações de uso",
+                          help="Documentacao sobre navegacao, colunas, analises e fontes de dados")
 
     # Sub-tabs para organizar o conteúdo de ajuda
     subtab1, subtab2, subtab3, subtab4, subtab5, subtab6 = st.tabs(["Navegação", "Entendendo os Dados", "Colunas e Métricas", "Análises", "Problemas Comuns", "Fontes de Dados"])

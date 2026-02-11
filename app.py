@@ -2318,7 +2318,7 @@ def _visao_estado_fragment():
                     max_items=MAX_CIDADES_GRAFICO, color="#22C55E", sort_by_alpha=False
                 )
                 chart_title_with_tooltip(f"Top {MAX_CIDADES_GRAFICO} cidades (PCLs) - {estado_filtro}", "Top cidades com mais PCLs no estado selecionado")
-                fig.update_layout(title=None)
+                fig.update_layout(title="")
                 st.plotly_chart(fig, use_container_width=True)
                 # Tabela com todas as cidades (ordenada alfabeticamente)
                 st.caption("Todas as cidades (PCLs)")
@@ -2345,7 +2345,7 @@ def _visao_estado_fragment():
                     max_items=MAX_CIDADES_GRAFICO, color="#3B82F6", sort_by_alpha=False
                 )
                 chart_title_with_tooltip(f"Top {MAX_CIDADES_GRAFICO} cidades (Empresas) - {estado_filtro}", "Top cidades com mais empresas no estado selecionado")
-                fig.update_layout(title=None)
+                fig.update_layout(title="")
                 st.plotly_chart(fig, use_container_width=True)
                 st.caption("Todas as cidades (Empresas)")
                 st.dataframe(
@@ -4215,7 +4215,7 @@ with tab_visao_geral:
             df_estado = df_labs_uf.groupby('uf').size().reset_index(name='Quantidade')
             fig = create_bar_chart(df_estado, 'uf', 'Quantidade', "PCLs por Estado", max_items=12, color='#22C55E')
             chart_title_with_tooltip("PCLs por Estado", "Distribuição dos PCLs credenciados por estado (UF), mostrando os 12 estados com maior quantidade")
-            fig.update_layout(title=None)
+            fig.update_layout(title="")
             st.plotly_chart(fig, use_container_width=True)
 
     with col2:
@@ -4227,7 +4227,7 @@ with tab_visao_geral:
             df_estado = df_emp_uf.groupby('uf').size().reset_index(name='Quantidade')
             fig = create_bar_chart(df_estado, 'uf', 'Quantidade', "Empresas por Estado", max_items=12, color='#3B82F6')
             chart_title_with_tooltip("Empresas por Estado", "Distribuição das empresas credenciadas por estado (UF), mostrando os 12 estados com maior quantidade")
-            fig.update_layout(title=None)
+            fig.update_layout(title="")
             st.plotly_chart(fig, use_container_width=True)
     
     st.markdown("")
@@ -4246,7 +4246,7 @@ with tab_visao_geral:
 
             fig = create_grouped_bar_chart(df_labs_uf, 'uf', "PCLs por Estado", max_items=10)
             chart_title_with_tooltip("PCLs Ativos vs Inativos por Estado", "Comparação entre PCLs ativos e inativos por estado, mostrando os 10 estados com maior volume total")
-            fig.update_layout(title=None)
+            fig.update_layout(title="")
             st.plotly_chart(fig, use_container_width=True)
 
     with col2:
@@ -4257,7 +4257,7 @@ with tab_visao_geral:
 
             fig = create_grouped_bar_chart(df_emp_uf, 'uf', "Empresas por Estado", max_items=10, labels={'Ativo': 'Ativas', 'Inativo': 'Inativas'})
             chart_title_with_tooltip("Empresas Ativas vs Inativas por Estado", "Comparação entre empresas ativas e inativas por estado, mostrando os 10 estados com maior volume total")
-            fig.update_layout(title=None)
+            fig.update_layout(title="")
             st.plotly_chart(fig, use_container_width=True)
 
 with tab_visao_estado:

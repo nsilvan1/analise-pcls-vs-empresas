@@ -65,9 +65,7 @@ COLUMN_TOOLTIPS = {
     "Cidades Atendidas": "Quantidade de cidades com presença no estado",
     # Comercial
     "Aceita Voucher": "Se o PCL aceita pagamento via voucher (Sim/Não)",
-    "Valor Coleta": "Valor cobrado por coleta (R$)",
-    "Valor do Exame": "Valor cobrado por exame (R$)",
-    "Preço Exclusivo": "Valor negociado para a empresa (R$)",
+    "Valor Coleta": "Valor total cobrado por coleta (R$)",
     "Acumulado Coletas": "Total histórico de coletas",
     "Acumulado Coletas 2026": "Coletas acumuladas no ano de 2026",
     "Acumulado Vouchers": "Total histórico de vouchers utilizados",
@@ -3191,7 +3189,7 @@ def _analises_especificas_fragment():
 
                 rename_map = {'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'nome_fantasia': 'Nome Fantasia',
                               'data_credenciamento': 'Data Credenciamento',
-                              'status_voucher': 'Aceita Voucher', 'valor_total_coleta': 'Valor Exame',
+                              'status_voucher': 'Aceita Voucher', 'valor_total_coleta': 'Valor Coleta',
                               'acumulado_coletas': 'Coletas Total', 'acumulado_coletas_ano': 'Coletas Ano',
                               'data_ultima_coleta': 'Última Coleta',
                               'status': 'Ativo/Inativo', 'representante': 'Representante',
@@ -3259,7 +3257,7 @@ def _analises_especificas_fragment():
 
                     rename_map = {'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'nome_fantasia': 'Nome Fantasia',
                                   'data_credenciamento': 'Data Credenciamento',
-                                  'status_voucher': 'Aceita Voucher', 'valor_total_coleta': 'Valor Exame',
+                                  'status_voucher': 'Aceita Voucher', 'valor_total_coleta': 'Valor Coleta',
                                   'acumulado_coletas': 'Coletas Total', 'acumulado_coletas_ano': 'Coletas Ano',
                                   'data_ultima_coleta': 'Última Coleta',
                                   'status': 'Ativo/Inativo', 'representante': 'Representante',
@@ -4785,7 +4783,7 @@ Planilha Excel (Total na planilha)
             | Razão Social / Nome Fantasia | Nomes do PCL |
             | Data Credenciamento | Data do credenciamento |
             | Aceita Voucher | Se aceita pagamento via voucher |
-            | Valor Exame | Valor cobrado por coleta |
+            | Valor Coleta | Valor total cobrado por coleta |
             | Coletas Total / Coletas Ano | Acumulado geral e do ano |
             | Última Coleta | Data da última coleta |
             | Ativo/Inativo | Status (regra de 90 dias) |

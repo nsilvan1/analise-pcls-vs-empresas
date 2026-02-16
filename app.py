@@ -3187,6 +3187,11 @@ def _analises_especificas_fragment():
 
                 df_display = df_result[cols_available].copy()
 
+                # Formatar datas para DD/MM/AAAA
+                for date_col in ['data_credenciamento', 'data_ultima_coleta']:
+                    if date_col in df_display.columns:
+                        df_display[date_col] = pd.to_datetime(df_display[date_col], errors='coerce').dt.strftime('%d/%m/%Y').fillna('')
+
                 rename_map = {'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'nome_fantasia': 'Nome Fantasia',
                               'data_credenciamento': 'Data Credenciamento',
                               'status_voucher': 'Aceita Voucher', 'valor_total_coleta': 'Valor Coleta',
@@ -3249,6 +3254,11 @@ def _analises_especificas_fragment():
 
                     df_display = df_result[cols_available].copy()
 
+                    # Formatar datas para DD/MM/AAAA
+                    for date_col in ['data_credenciamento', 'data_ultima_coleta']:
+                        if date_col in df_display.columns:
+                            df_display[date_col] = pd.to_datetime(df_display[date_col], errors='coerce').dt.strftime('%d/%m/%Y').fillna('')
+
                     # Adicionar quantidade de empresas inativas na cidade
                     cidade_map_norm_to_orig = dict(zip(df_empresas_norm['cidade'], df_empresas['cidade']))
                     cidades_originais = {cidade_map_norm_to_orig.get(c, c) for c in cidades_empresas_inativas if c in cidade_map_norm_to_orig}
@@ -3310,6 +3320,11 @@ def _analises_especificas_fragment():
 
                 df_display = df_result[cols_available].copy()
 
+                # Formatar datas para DD/MM/AAAA
+                for date_col in ['data_credenciamento', 'ultima_coleta', 'ultima_coleta_voucher']:
+                    if date_col in df_display.columns:
+                        df_display[date_col] = pd.to_datetime(df_display[date_col], errors='coerce').dt.strftime('%d/%m/%Y').fillna('')
+
                 rename_map = {'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'nome_fantasia': 'Nome Fantasia',
                               'data_credenciamento': 'Data Credenciamento',
                               'acumulado_vouchers': 'Vouchers Total', 'coletas_2025': 'Vouchers Ano',
@@ -3370,6 +3385,11 @@ def _analises_especificas_fragment():
 
                     df_display = df_result[cols_available].copy()
 
+                    # Formatar datas para DD/MM/AAAA
+                    for date_col in ['data_credenciamento', 'ultima_coleta', 'ultima_coleta_voucher']:
+                        if date_col in df_display.columns:
+                            df_display[date_col] = pd.to_datetime(df_display[date_col], errors='coerce').dt.strftime('%d/%m/%Y').fillna('')
+
                     # Adicionar quantidade de PCLs inativos na cidade
                     cidade_map_norm_to_orig = dict(zip(df_labs_norm['cidade'], df_labs['cidade']))
                     cidades_originais = {cidade_map_norm_to_orig.get(c, c) for c in cidades_pcls_inativos if c in cidade_map_norm_to_orig}
@@ -3404,10 +3424,11 @@ def _analises_especificas_fragment():
     elif analise_tipo == "Top PCLs por volume de coletas":
         if not df_labs.empty and 'acumulado_coletas' in df_labs.columns:
             top_pcls = df_labs.nlargest(50, 'acumulado_coletas')
-            cols = ['cnpj', 'razao_social', 'representante', 'cidade', 'uf', 'transportadora', 'frequencia', 'acumulado_coletas', 'status']
+            cols = ['cnpj', 'razao_social', 'nome_fantasia', 'representante', 'cidade', 'uf', 'transportadora', 'frequencia', 'acumulado_coletas', 'status']
             cols_available = [c for c in cols if c in top_pcls.columns]
             df_display = top_pcls[cols_available].copy()
-            rename_map = {'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'representante': 'Representante',
+            rename_map = {'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'nome_fantasia': 'Nome Fantasia',
+                          'representante': 'Representante',
                           'cidade': 'Cidade', 'uf': 'UF', 'transportadora': 'Transportadora', 'frequencia': 'Frequência',
                           'acumulado_coletas': 'Total Coletas', 'status': 'Status'}
             df_display = df_display.rename(columns=rename_map)
@@ -3534,12 +3555,17 @@ def _analises_especificas_fragment():
                 if df_pcls_filtrado.empty:
                     st.info("Nenhum PCL encontrado no período selecionado.")
                 else:
-                    cols = ['cnpj', 'razao_social', 'cidade', 'uf', 'representante', 'data_credenciamento', 'acumulado_coletas', 'status']
+                    cols = ['cnpj', 'razao_social', 'nome_fantasia', 'cidade', 'uf', 'representante', 'data_credenciamento', 'acumulado_coletas', 'status']
                     cols_available = [c for c in cols if c in df_pcls_filtrado.columns]
                     df_display = df_pcls_filtrado[cols_available].copy()
 
+                    # Formatar datas para DD/MM/AAAA
+                    if 'data_credenciamento' in df_display.columns:
+                        df_display['data_credenciamento'] = pd.to_datetime(df_display['data_credenciamento'], errors='coerce').dt.strftime('%d/%m/%Y').fillna('')
+
                     rename_map = {
-                        'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'cidade': 'Cidade', 'uf': 'UF',
+                        'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'nome_fantasia': 'Nome Fantasia',
+                        'cidade': 'Cidade', 'uf': 'UF',
                         'representante': 'Representante', 'data_credenciamento': 'Data Credenciamento',
                         'acumulado_coletas': 'Coletas', 'status': 'Status'
                     }
@@ -3562,12 +3588,17 @@ def _analises_especificas_fragment():
                 if df_empresas_filtrado.empty:
                     st.info("Nenhuma empresa encontrada no período selecionado.")
                 else:
-                    cols = ['cnpj', 'razao_social', 'cidade', 'uf', 'representante', 'data_credenciamento', 'acumulado_vouchers', 'status']
+                    cols = ['cnpj', 'razao_social', 'nome_fantasia', 'cidade', 'uf', 'representante', 'data_credenciamento', 'acumulado_vouchers', 'status']
                     cols_available = [c for c in cols if c in df_empresas_filtrado.columns]
                     df_display = df_empresas_filtrado[cols_available].copy()
 
+                    # Formatar datas para DD/MM/AAAA
+                    if 'data_credenciamento' in df_display.columns:
+                        df_display['data_credenciamento'] = pd.to_datetime(df_display['data_credenciamento'], errors='coerce').dt.strftime('%d/%m/%Y').fillna('')
+
                     rename_map = {
-                        'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'cidade': 'Cidade', 'uf': 'UF',
+                        'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'nome_fantasia': 'Nome Fantasia',
+                        'cidade': 'Cidade', 'uf': 'UF',
                         'representante': 'Representante', 'data_credenciamento': 'Data Credenciamento',
                         'acumulado_vouchers': 'Vouchers', 'status': 'Status'
                     }
@@ -3671,13 +3702,18 @@ def _analises_especificas_fragment():
             if not df_result.empty:
                 st.success(f"Encontrados {len(df_result)} PCLs sem coleta nos ultimos meses")
 
-                cols = ['cnpj', 'razao_social', 'cidade', 'uf', 'representante', 'email', 'telefone',
+                cols = ['cnpj', 'razao_social', 'nome_fantasia', 'cidade', 'uf', 'representante', 'email', 'telefone',
                         'status', 'acumulado_coletas', 'data_ultima_coleta', 'dias_sem_coleta'] + colunas_existentes
                 cols_available = [c for c in cols if c in df_result.columns]
                 df_display = df_result[cols_available].copy()
 
+                # Formatar datas para DD/MM/AAAA
+                if 'data_ultima_coleta' in df_display.columns:
+                    df_display['data_ultima_coleta'] = pd.to_datetime(df_display['data_ultima_coleta'], errors='coerce').dt.strftime('%d/%m/%Y').fillna('')
+
                 rename_map = {
-                    'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'cidade': 'Cidade', 'uf': 'UF',
+                    'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'nome_fantasia': 'Nome Fantasia',
+                    'cidade': 'Cidade', 'uf': 'UF',
                     'representante': 'Representante', 'email': 'E-mail', 'telefone': 'Telefone',
                     'status': 'Status', 'acumulado_coletas': 'Coletas Total',
                     'data_ultima_coleta': 'Ultima Coleta', 'dias_sem_coleta': 'Dias s/ Coleta',
@@ -3712,14 +3748,15 @@ def _analises_especificas_fragment():
             if not df_result.empty:
                 st.success(f"Encontrados {len(df_result)} PCLs com capacidade ociosa (< 50% utilizada)")
 
-                cols = ['cnpj', 'razao_social', 'cidade', 'uf', 'representante',
+                cols = ['cnpj', 'razao_social', 'nome_fantasia', 'cidade', 'uf', 'representante',
                         'coletas_2025', 'volume_maximo_coletas_2025', 'utilizacao_pct',
                         'valor_total_coleta', 'status']
                 cols_available = [c for c in cols if c in df_result.columns]
                 df_display = df_result[cols_available].copy()
 
                 rename_map = {
-                    'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'cidade': 'Cidade', 'uf': 'UF',
+                    'cnpj': 'CNPJ', 'razao_social': 'Razão Social', 'nome_fantasia': 'Nome Fantasia',
+                    'cidade': 'Cidade', 'uf': 'UF',
                     'representante': 'Representante', 'coletas_2025': 'Coletas 2025',
                     'volume_maximo_coletas_2025': 'Capacidade 2025', 'utilizacao_pct': '% Utilizacao',
                     'valor_total_coleta': 'Valor Coleta', 'status': 'Status'

@@ -1913,22 +1913,22 @@ def process_labs(df_labs):
     if 'status_voucher' in df.columns:
         df['status_voucher'] = df['status_voucher'].map({1: 'Sim', 0: 'Não'}).fillna('Não')
 
+    # Calcular dias_sem_coleta a partir de data_ultima_coleta (ignora valor da planilha)
+    hoje = pd.Timestamp.now().normalize()
+    if 'data_ultima_coleta' in df.columns:
+        df['dias_sem_coleta'] = (hoje - pd.to_datetime(df['data_ultima_coleta'], errors='coerce')).dt.days
+    else:
+        df['dias_sem_coleta'] = None
+
     # Calcular status baseado em dias sem coleta (regra: <=90 dias = Ativo, >90 dias = Inativo)
     # PCLs com "Ativo em Coletas" = False são sempre marcados como Inativo
-    # A coluna pode estar como 'dias_sem_coleta' (normalizada) ou 'dias sem coleta' (original)
-    dias_col = None
-    if 'dias_sem_coleta' in df.columns:
-        dias_col = 'dias_sem_coleta'
-    elif 'dias sem coleta' in df.columns:
-        dias_col = 'dias sem coleta'
-
-    if dias_col:
-        dias = pd.to_numeric(df[dias_col], errors='coerce').fillna(9999)
+    if df['dias_sem_coleta'].notna().any():
+        dias = df['dias_sem_coleta'].fillna(9999)
         df['status'] = dias.apply(lambda x: 'Ativo' if x <= 90 else 'Inativo')
     else:
-        # Fallback: usar acumulado (se não tem dias sem coleta, considera ativo se tem coletas)
+        # Fallback: usar acumulado (se não tem data_ultima_coleta, considera ativo se tem coletas)
         df['status'] = df['acumulado_coletas'].apply(lambda x: 'Ativo' if x > 0 else 'Inativo')
-        print(f"[LOG PCLs] AVISO: Coluna 'dias sem coleta' não encontrada. Usando fallback por acumulado.")
+        print(f"[LOG PCLs] AVISO: Coluna 'data_ultima_coleta' não encontrada. Usando fallback por acumulado.")
 
     # Marcar PCLs com "Ativo em Coletas" = False como Inativo (sobrescreve o status calculado acima)
     if '_inativo_em_coletas' in df.columns:

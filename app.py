@@ -1801,6 +1801,10 @@ def process_empresas(df_empresas):
     elif 'ultima_coleta_voucher' in df.columns:
         df['ultima_coleta'] = df['ultima_coleta_voucher']
 
+    # Converter datas para datetime com dayfirst=True (formato BR: DD/MM/YYYY)
+    if 'data_credenciamento' in df.columns:
+        df['data_credenciamento'] = pd.to_datetime(df['data_credenciamento'], errors='coerce', dayfirst=True)
+
     # ADD-960: Padronizar nomes de cidade e bairro
     if 'cidade' in df.columns:
         df['cidade'] = df['cidade'].apply(padronizar_nome)
@@ -1913,10 +1917,16 @@ def process_labs(df_labs):
     if 'status_voucher' in df.columns:
         df['status_voucher'] = df['status_voucher'].map({1: 'Sim', 0: 'Não'}).fillna('Não')
 
+    # Converter datas para datetime com dayfirst=True (formato BR: DD/MM/YYYY)
+    if 'data_ultima_coleta' in df.columns:
+        df['data_ultima_coleta'] = pd.to_datetime(df['data_ultima_coleta'], errors='coerce', dayfirst=True)
+    if 'data_credenciamento' in df.columns:
+        df['data_credenciamento'] = pd.to_datetime(df['data_credenciamento'], errors='coerce', dayfirst=True)
+
     # Calcular dias_sem_coleta a partir de data_ultima_coleta (ignora valor da planilha)
     hoje = pd.Timestamp.now().normalize()
     if 'data_ultima_coleta' in df.columns:
-        df['dias_sem_coleta'] = (hoje - pd.to_datetime(df['data_ultima_coleta'], errors='coerce')).dt.days
+        df['dias_sem_coleta'] = (hoje - df['data_ultima_coleta']).dt.days
     else:
         df['dias_sem_coleta'] = None
 
@@ -2855,14 +2865,7 @@ def _listagem_pcls_fragment():
             df_display['qtd_empresas_inativas_cidade'] = df_display['qtd_empresas_cidade'] - df_display['qtd_empresas_ativas_cidade']
             df_display['qtd_empresas_usaram_voucher'] = df_display['cidade'].map(empresas_com_voucher).fillna(0).astype(int)
 
-        # ADD-959: Adicionar dias desde última coleta para validação de status
-        if 'data_ultima_coleta' in df_display.columns:
-            hoje = pd.Timestamp.now().normalize()
-            df_display['dias_sem_coleta'] = df_display['data_ultima_coleta'].apply(
-                lambda x: (hoje - pd.to_datetime(x, errors='coerce')).days if pd.notna(x) else None
-            )
-        else:
-            df_display['dias_sem_coleta'] = None
+        # dias_sem_coleta já vem calculado pelo process_labs()
 
         # Seletor de colunas adicionais
         grupos_colunas_extras = {
@@ -2921,6 +2924,11 @@ def _listagem_pcls_fragment():
             'coletas_2023': 'Coletas 2023',
             'coletas_nov_2025': 'Nov/2025', 'coletas_dez_2025': 'Dez/2025', 'coletas_jan_2026': 'Jan/2026',
         }
+
+        # Formatar datas para DD/MM/AAAA antes da exibição
+        for date_col in ['data_credenciamento', 'data_ultima_coleta']:
+            if date_col in df_display.columns:
+                df_display[date_col] = pd.to_datetime(df_display[date_col], errors='coerce').dt.strftime('%d/%m/%Y').fillna('')
 
         df_final = prepare_display_dataframe(df_display, colunas_pcl, rename_map_pcl)
 
@@ -3078,12 +3086,10 @@ def _listagem_empresas_fragment():
         # ADD-958: Adicionar indicador se empresa já usou voucher
         df_display['ja_usou_voucher'] = df_display['acumulado_vouchers'].apply(lambda x: 'Sim' if x > 0 else 'Não')
 
-        # ADD-959: Adicionar dias desde última coleta para validação de status
+        # Calcular dias desde última coleta (ultima_coleta já é datetime do process_empresas)
         if 'ultima_coleta' in df_display.columns:
             hoje = pd.Timestamp.now().normalize()
-            df_display['dias_sem_coleta'] = df_display['ultima_coleta'].apply(
-                lambda x: (hoje - pd.to_datetime(x, errors='coerce')).days if pd.notna(x) else None
-            )
+            df_display['dias_sem_coleta'] = (hoje - pd.to_datetime(df_display['ultima_coleta'], errors='coerce', dayfirst=True)).dt.days
         else:
             df_display['dias_sem_coleta'] = None
 
@@ -3112,6 +3118,11 @@ def _listagem_empresas_fragment():
             'ultima_coleta_voucher': 'Último Voucher', 'dias_sem_coleta': 'Dias s/ Coleta', 'status': 'Status',
             'qtd_pcls_cidade': 'PCLs na Cidade'
         }
+
+        # Formatar datas para DD/MM/AAAA antes da exibição
+        for date_col in ['data_credenciamento', 'ultima_coleta', 'ultima_coleta_voucher']:
+            if date_col in df_display.columns:
+                df_display[date_col] = pd.to_datetime(df_display[date_col], errors='coerce').dt.strftime('%d/%m/%Y').fillna('')
 
         df_final = prepare_display_dataframe(df_display, colunas_empresa, rename_map_empresa)
 

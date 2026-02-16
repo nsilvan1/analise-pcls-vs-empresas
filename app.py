@@ -1910,7 +1910,11 @@ def process_labs(df_labs):
     for col in colunas_numericas_novas:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-    
+
+    # Converter status_voucher de 0/1 para Sim/Não
+    if 'status_voucher' in df.columns:
+        df['status_voucher'] = df['status_voucher'].map({1: 'Sim', 0: 'Não'}).fillna('Não')
+
     # Calcular status baseado em dias sem coleta (regra: <=90 dias = Ativo, >90 dias = Inativo)
     # PCLs com "Ativo em Coletas" = False são sempre marcados como Inativo
     # A coluna pode estar como 'dias_sem_coleta' (normalizada) ou 'dias sem coleta' (original)
